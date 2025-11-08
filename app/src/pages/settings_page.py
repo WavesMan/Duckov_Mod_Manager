@@ -13,7 +13,7 @@ def settings_page_view(page: ft.Page):
         # 显示保存成功的消息
         page.snack_bar = ft.SnackBar(
             content=ft.Text("设置已保存"),
-            bgcolor=ft.colors.GREEN
+            bgcolor=ft.Colors.GREEN,
         )
         page.snack_bar.open = True
         page.update()
@@ -22,7 +22,7 @@ def settings_page_view(page: ft.Page):
         # 恢复默认设置
         page.snack_bar = ft.SnackBar(
             content=ft.Text("设置已恢复为默认值"),
-            bgcolor=ft.colors.BLUE
+            bgcolor=ft.Colors.BLUE,
         )
         page.snack_bar.open = True
         page.update()

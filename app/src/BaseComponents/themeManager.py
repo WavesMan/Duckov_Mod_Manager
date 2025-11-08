@@ -1,255 +1,78 @@
 # BaseComponents/themeManager.py
-import flet as ft
 
-# 尝试导入 darkdetect，如果不可用则提供一个模拟实现
-try:
-    import darkdetect
-except ImportError:
-    # 模拟 darkdetect 以防未安装
-    class darkdetect:
-        @staticmethod
-        def isDark():
-            return False
-
-
-class AppColors:
-    """应用颜色常量类"""
+# 定义深色主题颜色方案
+DARK_THEME = {
     # 主要颜色
-    PRIMARY = "#2196F3"  # 蓝色
-    SECONDARY = "#FF9800"  # 橙色
-    ACCENT = "#FF5722"  # 深橙色
-    SUCCESS = "#4CAF50"  # 绿色
-    WARNING = "#FFEB3B"  # 黄色
-    ERROR = "#F44336"  # 红色
-    INFO = "#2196F3"  # 蓝色
-    
-    # 中性色
-    BLACK = "#000000"
-    WHITE = "#FFFFFF"
-    GRAY_50 = "#FAFAFA"
-    GRAY_100 = "#F5F5F5"
-    GRAY_200 = "#EEEEEE"
-    GRAY_300 = "#E0E0E0"
-    GRAY_400 = "#BDBDBD"
-    GRAY_500 = "#9E9E9E"
-    GRAY_600 = "#757575"
-    GRAY_700 = "#616161"
-    GRAY_800 = "#424242"
-    GRAY_900 = "#212121"
+    "primary": "#BB86FC",          # 主色调 - 紫色
+    "secondary": "#03DAC6",        # 次要颜色 - 青色
+    "background": "#121212",       # 背景颜色 - 深灰
+    "surface": "#1E1E1E",          # 表面颜色 - 稍浅的灰
+    "error": "#CF6679",            # 错误颜色 - 红色
     
     # 文本颜色
-    TEXT_PRIMARY = "#212121"
-    TEXT_SECONDARY = "#757575"
-    TEXT_DISABLED = "#BDBDBD"
+    "on_primary": "#000000",       # 主色调上的文字 - 黑色
+    "on_secondary": "#000000",     # 次要颜色上的文字 - 黑色
+    "on_background": "#FFFFFF",    # 背景上的文字 - 白色
+    "on_surface": "#FFFFFF",       # 表面颜色上的文字 - 白色
+    "on_error": "#000000",         # 错误颜色上的文字 - 黑色
     
-    # 背景色
-    BACKGROUND = "#FFFFFF"
-    SURFACE = "#FFFFFF"
-
-
-class ThemeManager:
-    """主题管理器类"""
+    # 文本颜色变体
+    "text_primary": "#FFFFFF",     # 主要文字颜色 - 白色
+    "text_secondary": "#B3B3B3",   # 次要文字颜色 - 浅灰
     
-    def __init__(self):
-        self.colors = AppColors()
-        # 默认使用系统主题，如果无法检测则使用浅色主题
-        try:
-            self.current_theme = "dark" if darkdetect.isDark() else "light"
-        except:
-            self.current_theme = "light"
-        
-    def get_color(self, color_name):
-        """获取指定名称的颜色值"""
-        return getattr(self.colors, color_name.upper(), self.colors.PRIMARY)
+    # 其他颜色
+    "divider": "#333333",          # 分割线颜色 - 深灰
+}
+
+# 定义浅色主题颜色方案
+LIGHT_THEME = {
+    # 主要颜色
+    "primary": "#6200EE",          # 主色调 - 紫色
+    "secondary": "#03DAC6",        # 次要颜色 - 青色
+    "background": "#FFFFFF",       # 背景颜色 - 白色
+    "surface": "#F5F5F5",          # 表面颜色 - 浅灰
+    "error": "#B00020",            # 错误颜色 - 深红
     
-    def set_theme(self, theme):
-        """设置主题"""
-        self.current_theme = theme
-        
-    def get_theme_colors(self):
-        """获取当前主题的颜色配置"""
-        if self.current_theme == "dark":
-            return {
-                "background": self.colors.GRAY_900,
-                "surface": self.colors.GRAY_800,
-                "primary": self.colors.PRIMARY,
-                "on_primary": self.colors.WHITE,
-                "secondary": self.colors.SECONDARY,
-                "on_secondary": self.colors.WHITE,
-                "text_primary": self.colors.WHITE,
-                "text_secondary": self.colors.GRAY_300,
-            }
-        else:  # light theme
-            return {
-                "background": self.colors.BACKGROUND,
-                "surface": self.colors.SURFACE,
-                "primary": self.colors.PRIMARY,
-                "on_primary": self.colors.WHITE,
-                "secondary": self.colors.SECONDARY,
-                "on_secondary": self.colors.WHITE,
-                "text_primary": self.colors.TEXT_PRIMARY,
-                "text_secondary": self.colors.TEXT_SECONDARY,
-            }
+    # 文本颜色
+    "on_primary": "#FFFFFF",       # 主色调上的文字 - 白色
+    "on_secondary": "#000000",     # 次要颜色上的文字 - 黑色
+    "on_background": "#000000",    # 背景上的文字 - 黑色
+    "on_surface": "#000000",       # 表面颜色上的文字 - 黑色
+    "on_error": "#FFFFFF",         # 错误颜色上的文字 - 白色
+    
+    # 文本颜色变体
+    "text_primary": "#000000",     # 主要文字颜色 - 黑色
+    "text_secondary": "#666666",   # 次要文字颜色 - 深灰
+    
+    # 其他颜色
+    "divider": "#E0E0E0",          # 分割线颜色 - 浅灰
+}
 
-
-# 全局主题管理器实例
-theme_manager = ThemeManager()
+# 当前主题（默认为深色主题）
+CURRENT_THEME = DARK_THEME
 
 
 def get_theme_colors():
-    """获取当前主题颜色配置"""
-    return theme_manager.get_theme_colors()
+    """
+    获取当前主题颜色方案
+    
+    Returns:
+        dict: 当前主题的颜色字典
+    """
+    return CURRENT_THEME
 
 
-def get_color(color_name):
-    """获取指定颜色"""
-    return theme_manager.get_color(color_name)
-
-
-def switch_theme(theme):
-    """切换主题"""
-    theme_manager.set_theme(theme)
-
-
-def auto_detect_theme():
-    """自动检测系统主题"""
-    try:
-        theme = "dark" if darkdetect.isDark() else "light"
-        theme_manager.set_theme(theme)
-        return theme
-    except:
-        # 如果无法检测系统主题，默认使用浅色主题
-        theme_manager.set_theme("light")
-        return "light"
-
-
-# 主题相关的便捷函数
-def themed_button(text, on_click=None, button_type="primary", **kwargs):
-    """创建主题化按钮
+def set_theme(theme_name):
+    """
+    设置主题
     
     Args:
-        text: 按钮文本
-        on_click: 点击事件
-        button_type: 按钮类型 ("primary", "secondary", "success", "warning", "error")
-        **kwargs: 其他参数
+        theme_name (str): 主题名称 ('dark' 或 'light')
     """
-    colors = get_theme_colors()
-    
-    button_configs = {
-        "primary": {
-            "color": colors["on_primary"],
-            "bgcolor": colors["primary"]
-        },
-        "secondary": {
-            "color": colors["on_secondary"],
-            "bgcolor": colors["secondary"]
-        },
-        "success": {
-            "color": "white",
-            "bgcolor": AppColors.SUCCESS
-        },
-        "warning": {
-            "color": "black",
-            "bgcolor": AppColors.WARNING
-        },
-        "error": {
-            "color": "white",
-            "bgcolor": AppColors.ERROR
-        }
-    }
-    
-    config = button_configs.get(button_type, button_configs["primary"])
-    
-    return ft.ElevatedButton(
-        text=text,
-        on_click=on_click,
-        color=config["color"],
-        bgcolor=config["bgcolor"],
-        **kwargs
-    )
-
-
-def themed_text(text, text_type="body", **kwargs):
-    """创建主题化文本
-    
-    Args:
-        text: 文本内容
-        text_type: 文本类型 ("heading", "body", "caption", "link")
-        **kwargs: 其他参数
-    """
-    colors = get_theme_colors()
-    
-    text_configs = {
-        "heading": {
-            "size": 24,
-            "color": colors["text_primary"],
-            "weight": ft.FontWeight.BOLD
-        },
-        "body": {
-            "size": 16,
-            "color": colors["text_primary"],
-            "weight": ft.FontWeight.NORMAL
-        },
-        "caption": {
-            "size": 12,
-            "color": colors["text_secondary"],
-            "weight": ft.FontWeight.NORMAL
-        },
-        "link": {
-            "size": 16,
-            "color": colors["primary"],
-            "weight": ft.FontWeight.NORMAL
-        }
-    }
-    
-    config = text_configs.get(text_type, text_configs["body"])
-    
-    # 合并传入的参数
-    for key, value in kwargs.items():
-        config[key] = value
-    
-    return ft.Text(
-        text,
-        **config
-    )
-
-
-def themed_container(content, container_type="card", **kwargs):
-    """创建主题化容器
-    
-    Args:
-        content: 容器内容
-        container_type: 容器类型 ("card", "surface", "outlined")
-        **kwargs: 其他参数
-    """
-    colors = get_theme_colors()
-    
-    container_configs = {
-        "card": {
-            "bgcolor": colors["surface"],
-            "border_radius": 8,
-            "padding": 16,
-            "elevation": 2
-        },
-        "surface": {
-            "bgcolor": colors["surface"],
-            "padding": 16
-        },
-        "outlined": {
-            "bgcolor": colors["surface"],
-            "border": ft.border.all(1, colors["text_secondary"]),
-            "border_radius": 4,
-            "padding": 16
-        }
-    }
-    
-    config = container_configs.get(container_type, container_configs["card"])
-    
-    # 合并传入的参数
-    for key, value in kwargs.items():
-        config[key] = value
-    
-    return ft.Container(
-        content=content,
-        **config
-    )
+    global CURRENT_THEME
+    if theme_name.lower() == 'dark':
+        CURRENT_THEME = DARK_THEME
+    elif theme_name.lower() == 'light':
+        CURRENT_THEME = LIGHT_THEME
+    else:
+        raise ValueError("不支持的主题名称。请使用 'dark' 或 'light'。")

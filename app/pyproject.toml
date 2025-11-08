@@ -8,8 +8,10 @@ authors = [
     { name = "Duckov Mod Manager Team", email = "" }
 ]
 dependencies = [
+  "bs4>=0.0.2",
   "darkdetect>=0.8.0",
   "flet[all]==0.28.3",
+  "requests>=2.25.0",
 ]
 
 [[index]]

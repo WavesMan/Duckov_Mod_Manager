@@ -221,6 +221,7 @@ def image_card(
     image_height=150,
     expand=False,
     width=None,
+    height=None,
     elevation=1,
     padding=16,
     margin=8,
@@ -237,6 +238,7 @@ def image_card(
         image_height: 图片高度
         expand: 是否扩展填充
         width: 卡片宽度
+        height: 卡片高度
         elevation: 阴影高度
         padding: 内边距
         margin: 外边距
@@ -250,7 +252,7 @@ def image_card(
         src=image_src,
         height=image_height,
         fit=image_fit,
-        width=width
+        width=width if width is not None else image_height  # 如果未指定宽度，则使用高度值以保持1:1比例
     )
     
     # 组织内容
@@ -278,7 +280,8 @@ def image_card(
             
         card_content = ft.Column(
             content_controls,
-            spacing=8
+            spacing=8,
+            expand=True  # 允许内容扩展填充
         )
     else:
         # 如果没有其他内容，只显示图片
@@ -288,8 +291,9 @@ def image_card(
         content=card_content,
         expand=expand,
         width=width,
+        height=height,
         elevation=elevation,
-        padding=0,  # 图片卡片通常不需要内边距
+        padding=padding,  # 保持正常的内边距
         margin=margin
     )
 
