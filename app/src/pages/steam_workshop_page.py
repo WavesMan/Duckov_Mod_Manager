@@ -1,9 +1,149 @@
 # pages/steam_workshop_page.py
 import flet as ft
-from BaseComponents import *
+import sys
+import os
+
+# 添加src目录到Python路径
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from theme_manager import get_theme_colors
 from services.steam_workshop_service import SteamWorkshopService
 import asyncio
 from typing import Dict, List, Optional
+
+
+def heading(text, level=1, color=None):
+    """
+    创建标题文本
+    
+    Args:
+        text (str): 标题文本
+        level (int): 标题级别 (1-6)
+        color (str, optional): 文本颜色，默认使用主题颜色
+        
+    Returns:
+        ft.Text: 配置好的标题文本控件
+    """
+    colors = get_theme_colors()
+    if color is None:
+        color = colors["text_primary"]
+    
+    # 根据标题级别设置大小和样式
+    sizes = {1: 32, 2: 28, 3: 24, 4: 20, 5: 18, 6: 16}
+    weights = {1: ft.FontWeight.BOLD, 2: ft.FontWeight.BOLD, 3: ft.FontWeight.BOLD,
+               4: ft.FontWeight.NORMAL, 5: ft.FontWeight.NORMAL, 6: ft.FontWeight.NORMAL}
+    
+    return ft.Text(
+        text,
+        size=sizes.get(level, 16),
+        weight=weights.get(level, ft.FontWeight.NORMAL),
+        color=color,
+        font_family="MiSans"
+    )
+
+
+def body(text, size=14, color=None, weight=ft.FontWeight.NORMAL):
+    """
+    创建正文文本
+    
+    Args:
+        text (str): 正文文本
+        size (int): 字体大小
+        color (str, optional): 文本颜色，默认使用主题颜色
+        weight (ft.FontWeight): 字体粗细
+        
+    Returns:
+        ft.Text: 配置好的正文文本控件
+    """
+    colors = get_theme_colors()
+    if color is None:
+        color = colors["text_primary"]
+        
+    return ft.Text(
+        text,
+        size=size,
+        color=color,
+        weight=weight,
+        font_family="MiSans"
+    )
+
+
+def caption(text, size=12, color=None):
+    """
+    创建说明文字
+    
+    Args:
+        text (str): 说明文字
+        size (int): 字体大小
+        color (str, optional): 文本颜色，默认使用主题颜色
+        
+    Returns:
+        ft.Text: 配置好的说明文字控件
+    """
+    colors = get_theme_colors()
+    if color is None:
+        color = colors["text_secondary"]
+        
+    return ft.Text(
+        text,
+        size=size,
+        color=color,
+        font_family="MiSans"
+    )
+
+
+def primary_button(text, on_click=None, width=None, height=None):
+    """
+    创建主要操作按钮
+    
+    Args:
+        text (str): 按钮文本
+        on_click (callable): 点击事件处理函数
+        width (int, optional): 按钮宽度
+        height (int, optional): 按钮高度
+        
+    Returns:
+        ft.ElevatedButton: 配置好的主要按钮
+    """
+    colors = get_theme_colors()
+    return ft.ElevatedButton(
+        text=text,
+        on_click=on_click,
+        width=width,
+        height=height,
+        style=ft.ButtonStyle(
+            color=ft.Colors.WHITE,
+            bgcolor=colors["primary"],
+            text_style=ft.TextStyle(font_family="MiSans")
+        ),
+    )
+
+
+def secondary_button(text, on_click=None, width=None, height=None):
+    """
+    创建次要操作按钮
+    
+    Args:
+        text (str): 按钮文本
+        on_click (callable): 点击事件处理函数
+        width (int, optional): 按钮宽度
+        height (int, optional): 按钮高度
+        
+    Returns:
+        ft.OutlinedButton: 配置好的次要按钮
+    """
+    colors = get_theme_colors()
+    return ft.OutlinedButton(
+        text=text,
+        on_click=on_click,
+        width=width,
+        height=height,
+        style=ft.ButtonStyle(
+            color=colors["primary"],
+            side=ft.BorderSide(1, colors["primary"]),
+            text_style=ft.TextStyle(font_family="MiSans")
+        ),
+    )
 
 
 class SteamWorkshopPage:
@@ -233,6 +373,7 @@ class SteamWorkshopPage:
             style=ft.ButtonStyle(
                 color=ft.Colors.WHITE,
                 bgcolor=colors["primary"],
+                text_style=ft.TextStyle(font_family="MiSans")
             ),
             width=100
         )
@@ -305,10 +446,12 @@ class SteamWorkshopPage:
             ft.ElevatedButton("查看详情", width=100, height=30, style=ft.ButtonStyle(
                 color=ft.Colors.WHITE,
                 bgcolor=colors["primary"],
+                text_style=ft.TextStyle(font_family="MiSans")
             )),
             ft.OutlinedButton("下载", width=80, height=30, style=ft.ButtonStyle(
                 color=colors["primary"],
                 side=ft.BorderSide(1, colors["primary"]),
+                text_style=ft.TextStyle(font_family="MiSans")
             ))
         ]
         
@@ -397,6 +540,7 @@ class SteamWorkshopPage:
             style=ft.ButtonStyle(
                 color=ft.Colors.WHITE,
                 bgcolor=colors["primary"] if current_page > 1 else colors["text_secondary"],
+                text_style=ft.TextStyle(font_family="MiSans")
             ),
             width=80,
             disabled=(current_page <= 1)
@@ -408,6 +552,7 @@ class SteamWorkshopPage:
             style=ft.ButtonStyle(
                 color=ft.Colors.WHITE,
                 bgcolor=colors["primary"] if current_page < total_pages else colors["text_secondary"],
+                text_style=ft.TextStyle(font_family="MiSans")
             ),
             width=80,
             disabled=(current_page >= total_pages)
@@ -462,6 +607,7 @@ class SteamWorkshopPage:
                 style=ft.ButtonStyle(
                     color=ft.Colors.WHITE,
                     bgcolor=colors["primary"],
+                    text_style=ft.TextStyle(font_family="MiSans")
                 ),
                 width=60,
                 height=60,

@@ -1,14 +1,317 @@
 # pages/settings_page.py
 import flet as ft
-from BaseComponents import *
+import sys
+import os
+
+# 添加src目录到Python路径
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from theme_manager import get_theme_colors
+from config_manager import config_manager
+
+
+def heading(text, level=1, color=None):
+    """
+    创建标题文本
+    
+    Args:
+        text (str): 标题文本
+        level (int): 标题级别 (1-6)
+        color (str, optional): 文本颜色，默认使用主题颜色
+        
+    Returns:
+        ft.Text: 配置好的标题文本控件
+    """
+    colors = get_theme_colors()
+    if color is None:
+        color = colors["text_primary"]
+    
+    # 根据标题级别设置大小和样式
+    sizes = {1: 32, 2: 28, 3: 24, 4: 20, 5: 18, 6: 16}
+    weights = {1: ft.FontWeight.BOLD, 2: ft.FontWeight.BOLD, 3: ft.FontWeight.BOLD,
+               4: ft.FontWeight.NORMAL, 5: ft.FontWeight.NORMAL, 6: ft.FontWeight.NORMAL}
+    
+    return ft.Text(
+        text,
+        size=sizes.get(level, 16),
+        weight=weights.get(level, ft.FontWeight.NORMAL),
+        color=color,
+        font_family="MiSans"
+    )
+
+
+def body(text, size=14, color=None, weight=ft.FontWeight.NORMAL):
+    """
+    创建正文文本
+    
+    Args:
+        text (str): 正文文本
+        size (int): 字体大小
+        color (str, optional): 文本颜色，默认使用主题颜色
+        weight (ft.FontWeight): 字体粗细
+        
+    Returns:
+        ft.Text: 配置好的正文文本控件
+    """
+    colors = get_theme_colors()
+    if color is None:
+        color = colors["text_primary"]
+        
+    return ft.Text(
+        text,
+        size=size,
+        color=color,
+        weight=weight,
+        font_family="MiSans"
+    )
+
+
+def caption(text, size=12, color=None):
+    """
+    创建说明文字
+    
+    Args:
+        text (str): 说明文字
+        size (int): 字体大小
+        color (str, optional): 文本颜色，默认使用主题颜色
+        
+    Returns:
+        ft.Text: 配置好的说明文字控件
+    """
+    colors = get_theme_colors()
+    if color is None:
+        color = colors["text_secondary"]
+        
+    return ft.Text(
+        text,
+        size=size,
+        color=color,
+        font_family="MiSans"
+    )
+
+
+def primary_button(text, on_click=None, width=None, height=None):
+    """
+    创建主要操作按钮
+    
+    Args:
+        text (str): 按钮文本
+        on_click (callable): 点击事件处理函数
+        width (int, optional): 按钮宽度
+        height (int, optional): 按钮高度
+        
+    Returns:
+        ft.ElevatedButton: 配置好的主要按钮
+    """
+    colors = get_theme_colors()
+    return ft.ElevatedButton(
+        text=text,
+        on_click=on_click,
+        width=width,
+        height=height,
+        style=ft.ButtonStyle(
+            color=ft.Colors.WHITE,
+            bgcolor=colors["primary"],
+            text_style=ft.TextStyle(font_family="MiSans")
+        ),
+    )
+
+
+def secondary_button(text, on_click=None, width=None, height=None):
+    """
+    创建次要操作按钮
+    
+    Args:
+        text (str): 按钮文本
+        on_click (callable): 点击事件处理函数
+        width (int, optional): 按钮宽度
+        height (int, optional): 按钮高度
+        
+    Returns:
+        ft.OutlinedButton: 配置好的次要按钮
+    """
+    colors = get_theme_colors()
+    return ft.OutlinedButton(
+        text=text,
+        on_click=on_click,
+        width=width,
+        height=height,
+        style=ft.ButtonStyle(
+            color=colors["primary"],
+            side=ft.BorderSide(1, colors["primary"]),
+            text_style=ft.TextStyle(font_family="MiSans")
+        ),
+    )
+
+
+def scrollable_page(
+    content,
+    scroll=ft.ScrollMode.AUTO,
+    alignment=ft.MainAxisAlignment.START,
+    horizontal_alignment=ft.CrossAxisAlignment.START,
+    spacing=10,
+    padding=20,
+    auto_scroll=False,
+    **kwargs
+):
+    """
+    创建一个可滚动的页面布局的便捷函数
+    
+    Args:
+        content: 页面内容（可以是控件列表或单个控件）
+        scroll: 滚动模式
+        alignment: 主轴对齐方式
+        horizontal_alignment: 交叉轴对齐方式
+        spacing: 控件间距
+        padding: 页面内边距
+        auto_scroll: 是否自动滚动到底部
+        **kwargs: 其他参数
+        
+    Returns:
+        ft.Column: 配置好的可滚动列布局
+    """
+    # 如果内容不是列表，转换为列表
+    if not isinstance(content, list):
+        content = [content]
+        
+    # 创建可滚动的列布局
+    scrollable_column = ft.Column(
+        controls=content,
+        scroll=scroll,
+        alignment=alignment,
+        horizontal_alignment=horizontal_alignment,
+        spacing=spacing,
+        auto_scroll=auto_scroll,
+        **kwargs
+    )
+    
+    # 如果指定了padding，则将其包装在一个容器中
+    if padding:
+        return ft.Container(
+            content=scrollable_column,
+            padding=padding
+        )
+    
+    return scrollable_column
 
 
 def settings_page_view(page: ft.Page):
     """设置页面视图"""
     
+    # 从配置管理器获取目录路径
+    game_directory_path = config_manager.get("game_directory")
+    cache_directory_path = config_manager.get("cache_directory")
+    temp_directory_path = config_manager.get("temp_directory")
+    
+    # 游戏目录路径显示文本框
+    game_directory_field = ft.TextField(
+        label="游戏目录",
+        value=game_directory_path,
+        width=400,
+        read_only=True
+    )
+    
+    # 缓存目录路径显示文本框
+    cache_directory_field = ft.TextField(
+        label="缓存目录",
+        value=cache_directory_path,
+        width=400,
+        read_only=True
+    )
+    
+    # 临时文件目录路径显示文本框
+    temp_directory_field = ft.TextField(
+        label="临时文件目录",
+        value=temp_directory_path,
+        width=400,
+        read_only=True
+    )
+    
+    # 存储文件选择器实例，确保在页面切换后仍然可用
+    file_pickers = {}
+    
+    def select_game_directory(e):
+        """选择游戏目录"""
+        def pick_game_dir_result(e: ft.FilePickerResultEvent):
+            if e.path:
+                # 检查路径是否包含"Escape from Duckov"文件夹
+                if "Escape from Duckov" in e.path:
+                    # 保存到配置管理器
+                    config_manager.set("game_directory", e.path)
+                    # 更新显示
+                    game_directory_field.value = e.path
+                    page.update()
+                else:
+                    # 保存当前有效路径用于回退
+                    previous_path = game_directory_field.value
+                    # 显示错误消息
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text("请选择包含'Escape from Duckov'的路径"),
+                        bgcolor=ft.Colors.RED,
+                    )
+                    page.snack_bar.open = True
+                    page.update()
+                    # 等待消息显示后回退到之前的有效路径
+                    import time
+                    time.sleep(0.1)
+                    # 回退到之前的有效路径
+                    game_directory_field.value = previous_path
+                    page.update()
+            elif e.path is None:
+                # 用户取消选择，保持原路径不变
+                pass
+        
+        # 创建或重用文件选择器
+        if "game" not in file_pickers:
+            file_picker = ft.FilePicker(on_result=pick_game_dir_result)
+            file_pickers["game"] = file_picker
+            page.overlay.append(file_picker)
+            page.update()
+        file_pickers["game"].get_directory_path(dialog_title="选择包含'Escape from Duckov'的目录")
+
+    def select_cache_directory(e):
+        """选择缓存目录"""
+        def pick_cache_dir_result(e: ft.FilePickerResultEvent):
+            if e.path:
+                # 保存到配置管理器
+                config_manager.set("cache_directory", e.path)
+                # 更新显示
+                cache_directory_field.value = e.path
+                page.update()
+        
+        # 创建或重用文件选择器
+        if "cache" not in file_pickers:
+            file_picker = ft.FilePicker(on_result=pick_cache_dir_result)
+            file_pickers["cache"] = file_picker
+            page.overlay.append(file_picker)
+            page.update()
+        file_pickers["cache"].get_directory_path(dialog_title="选择缓存目录")
+
+    def select_temp_directory(e):
+        """选择临时文件目录"""
+        def pick_temp_dir_result(e: ft.FilePickerResultEvent):
+            if e.path:
+                # 保存到配置管理器
+                config_manager.set("temp_directory", e.path)
+                # 更新显示
+                temp_directory_field.value = e.path
+                page.update()
+        
+        # 创建或重用文件选择器
+        if "temp" not in file_pickers:
+            file_picker = ft.FilePicker(on_result=pick_temp_dir_result)
+            file_pickers["temp"] = file_picker
+            page.overlay.append(file_picker)
+            page.update()
+        file_pickers["temp"].get_directory_path(dialog_title="选择临时文件目录")
+
     def save_settings(e):
-        # 处理设置保存
-        # 由于我们只支持深色主题，这里可以添加其他设置的保存逻辑
+        """保存设置"""
+        # 保存所有配置项到配置管理器
+        config_manager.set("language", language_dropdown.value)
+        config_manager.set("auto_update", auto_update_checkbox.value)
+        config_manager.set("minimize_to_tray", minimize_to_tray_checkbox.value)
+        config_manager.set("enable_animations", enable_animations_checkbox.value)
         
         # 显示保存成功的消息
         page.snack_bar = ft.SnackBar(
@@ -19,7 +322,22 @@ def settings_page_view(page: ft.Page):
         page.update()
     
     def reset_settings(e):
-        # 恢复默认设置
+        """恢复默认设置"""
+        # 重置配置管理器到默认值
+        config_manager.reset_to_default()
+        
+        # 更新UI控件的值
+        game_directory_field.value = config_manager.get("game_directory")
+        cache_directory_field.value = config_manager.get("cache_directory")
+        temp_directory_field.value = config_manager.get("temp_directory")
+        language_dropdown.value = config_manager.get("language")
+        auto_update_checkbox.value = config_manager.get("auto_update")
+        minimize_to_tray_checkbox.value = config_manager.get("minimize_to_tray")
+        enable_animations_checkbox.value = config_manager.get("enable_animations")
+        
+        page.update()
+        
+        # 显示恢复默认值的消息
         page.snack_bar = ft.SnackBar(
             content=ft.Text("设置已恢复为默认值"),
             bgcolor=ft.Colors.BLUE,
@@ -38,121 +356,83 @@ def settings_page_view(page: ft.Page):
         padding=ft.padding.only(top=20, bottom=20)
     )
     
+    # 创建设置表单控件
+    auto_update_checkbox = ft.Checkbox(
+        label="启动时自动检查更新",
+        value=config_manager.get("auto_update")
+    )
+    
+    minimize_to_tray_checkbox = ft.Checkbox(
+        label="最小化到系统托盘",
+        value=config_manager.get("minimize_to_tray")
+    )
+    
+    language_dropdown = ft.Dropdown(
+        label="语言",
+        options=[
+            ft.dropdown.Option("简体中文"),
+            ft.dropdown.Option("English"),
+            ft.dropdown.Option("日本語")
+        ],
+        value=config_manager.get("language"),
+        width=400
+    )
+    
+    enable_animations_checkbox = ft.Checkbox(
+        label="启用动画效果",
+        value=config_manager.get("enable_animations")
+    )
+    
     # 创建设置表单（不含操作按钮）
     settings_form = ft.Column(
         controls=[
             heading("常规设置", level=2),
             
-            ft.Checkbox(
-                label="启动时自动检查更新",
-                value=True
+            auto_update_checkbox,
+            
+            minimize_to_tray_checkbox,
+            
+            ft.Row(
+                controls=[
+                    game_directory_field,
+                    primary_button("浏览...", on_click=select_game_directory, width=100)
+                ],
+                alignment=ft.MainAxisAlignment.START,
+                spacing=10
             ),
-            
-            ft.Checkbox(
-                label="最小化到系统托盘",
-                value=False
-            ),
-            
-            ft.TextField(
-                label="下载目录",
-                value="C:/Games/MyGame/Mods",
-                width=400
-            ),
-            
-            ft.Divider(height=20),
-            
-            heading("高级设置", level=2),
-            
-            ft.Checkbox(
-                label="启用调试日志",
-                value=False
-            ),
-            
-            ft.TextField(
-                label="代理服务器",
-                hint_text="例如: http://proxy.company.com:8080",
-                width=400
-            ),
-            
-            ft.TextField(
-                label="并发下载数",
-                value="3",
-                width=400,
-                keyboard_type=ft.KeyboardType.NUMBER
-            ),
-            
-            ft.Divider(height=20),
-            
-            # 添加更多设置项以测试滚动
-            heading("网络设置", level=2),
-            
-            ft.TextField(
-                label="连接超时(秒)",
-                value="30",
-                width=400,
-                keyboard_type=ft.KeyboardType.NUMBER
-            ),
-            
-            ft.TextField(
-                label="重试次数",
-                value="3",
-                width=400,
-                keyboard_type=ft.KeyboardType.NUMBER
-            ),
-            
+
             ft.Divider(height=20),
             
             heading("存储设置", level=2),
             
-            ft.TextField(
-                label="缓存目录",
-                value="C:/Games/MyGame/Cache",
-                width=400
+            ft.Row(
+                controls=[
+                    cache_directory_field,
+                    primary_button("浏览...", on_click=select_cache_directory, width=100)
+                ],
+                alignment=ft.MainAxisAlignment.START,
+                spacing=10
             ),
             
-            ft.TextField(
-                label="临时文件目录",
-                value="C:/Temp/MyGame",
-                width=400
+            ft.Row(
+                controls=[
+                    temp_directory_field,
+                    primary_button("浏览...", on_click=select_temp_directory, width=100)
+                ],
+                alignment=ft.MainAxisAlignment.START,
+                spacing=10
             ),
             
             ft.Divider(height=20),
             
             heading("界面设置", level=2),
             
-            ft.Dropdown(
-                label="语言",
-                options=[
-                    ft.dropdown.Option("简体中文"),
-                    ft.dropdown.Option("English"),
-                    ft.dropdown.Option("日本語")
-                ],
-                value="简体中文",
-                width=400
-            ),
+            language_dropdown,
             
-            ft.Checkbox(
-                label="启用动画效果",
-                value=True
-            ),
+            enable_animations_checkbox,
             
             ft.Divider(height=20),
-            
-            heading("备份设置", level=2),
-            
-            ft.Checkbox(
-                label="自动备份模组",
-                value=True
-            ),
-            
-            ft.TextField(
-                label="备份保留天数",
-                value="30",
-                width=400,
-                keyboard_type=ft.KeyboardType.NUMBER
-            ),
-            
-            ft.Divider(height=20),
+
         ],
         spacing=15
     )
