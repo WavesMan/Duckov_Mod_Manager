@@ -209,7 +209,6 @@ def _create_mod_card(mod_info: dict, page: ft.Page) -> ft.Control:
     
     # 模组信息
     id_text = body(f"ID: {mod_info['id']}")
-    version_text = body(f"版本: {mod_info.get('version', '1.0.0')}")
     size_text = body(f"大小: {mod_info.get('size', '未知')}")
     
     # 模组描述
@@ -242,13 +241,24 @@ def _create_mod_card(mod_info: dict, page: ft.Page) -> ft.Control:
     )
     
     # 右侧详细信息部分
+    # 为描述文本创建可滚动容器
+    description_container = ft.Container(
+        content=ft.Column(
+            controls=[description_text],
+            spacing=4,
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        ),
+        height=40,  # 固定描述区域高度
+        expand=True,
+    )
+    
     details_column = ft.Column(
         controls=[
             title,
             id_text,
-            version_text,
             size_text,
-            description_text,
+            description_container,
             status_text
         ],
         spacing=4,
@@ -356,13 +366,15 @@ def _create_mod_card(mod_info: dict, page: ft.Page) -> ft.Control:
     )
     
     # 创建卡片
-    return ft.Card(
+    card = ft.Card(
         content=ft.Container(
             content=content_row,
             padding=10,
         ),
         margin=5,
     )
+    
+    return card
 
 
 def mods_page_view(page: ft.Page):
@@ -373,7 +385,7 @@ def mods_page_view(page: ft.Page):
     # 创建一个引用，用于更新模组列表
     mod_cards_container = ft.Column(spacing=10)
     
-    def refresh_mods_list():
+    def refresh_mods_list(search_term=""):
         """刷新模组列表"""
         # 清空现有内容
         mod_cards_container.controls.clear()
@@ -381,29 +393,72 @@ def mods_page_view(page: ft.Page):
         # 获取已下载的模组
         downloaded_mods = mod_manager.get_downloaded_mods()
         
-        # 创建模组卡片列表
-        mod_cards = []
-        for mod_info in downloaded_mods:
+        # 如果有搜索词，进行过滤
+        if search_term:
+            filtered_mods = []
+            for mod_info in downloaded_mods:
+                # 获取模组名称和描述
+                mod_name = mod_info.get('display_name', mod_info.get('name', f'模组 {mod_info["id"]}'))
+                mod_description = mod_info.get('description', '')
+                
+                # 检查搜索词是否在名称或描述中
+                if search_term.lower() in mod_name.lower() or search_term.lower() in mod_description.lower():
+                    filtered_mods.append(mod_info)
+            downloaded_mods = filtered_mods
+        
+        # 创建双列布局
+        left_column = ft.Column(spacing=10, expand=True)
+        right_column = ft.Column(spacing=10, expand=True)
+        
+        # 交替将模组卡片添加到左右两列
+        for i, mod_info in enumerate(downloaded_mods):
             mod_card = _create_mod_card(mod_info, page)
-            mod_cards.append(mod_card)
+            # 固定卡片尺寸
+            mod_card.width = 500
+            mod_card.height = 250
+            if i % 2 == 0:
+                left_column.controls.append(mod_card)
+            else:
+                right_column.controls.append(mod_card)
         
         # 如果没有模组，显示提示信息
-        if not mod_cards:
+        if not downloaded_mods:
             no_mods_content = ft.Column([
                 ft.Icon(ft.Icons.FOLDER_OFF, size=64, color=colors["text_secondary"]),
                 heading("未找到已下载的模组", level=3),
                 body("请先在创意工坊页面下载模组"),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=20)
-            mod_cards.append(no_mods_content)
+            left_column.controls.append(no_mods_content)
         
-        # 添加模组卡片到容器
-        mod_cards_container.controls.extend(mod_cards)
+        # 创建双列容器
+        columns_row = ft.ResponsiveRow(
+            controls=[
+                ft.Container(content=left_column, col={"xs": 12, "sm": 12, "md": 6}),
+                ft.Container(content=right_column, col={"xs": 12, "sm": 12, "md": 6}),
+            ],
+            spacing=10,
+            expand=True
+        )
+        
+        # 添加双列容器到主容器
+        mod_cards_container.controls.append(columns_row)
         
         # 更新总计信息
-        mod_count = len([card for card in mod_cards if isinstance(card, ft.Card)])
+        mod_count = len(downloaded_mods)
         count_text.value = f"总共 {mod_count} 个模组"
         
         page.update()
+    
+    # 搜索框处理函数
+    def on_search_change(e):
+        refresh_mods_list(e.control.value)
+    
+    # 创建搜索框
+    search_box = ft.TextField(
+        label="搜索模组...",
+        on_change=on_search_change,
+        width=300,
+    )
     
     # 创建刷新按钮
     refresh_button = primary_button("刷新列表", on_click=lambda _: refresh_mods_list())
@@ -418,7 +473,10 @@ def mods_page_view(page: ft.Page):
         
         ft.Divider(height=20),
         
-        refresh_button,
+        ft.Row([
+            refresh_button,
+            search_box,
+        ], spacing=10),
         
         ft.Divider(height=20),
         
