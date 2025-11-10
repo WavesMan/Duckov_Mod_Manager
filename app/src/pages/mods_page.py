@@ -455,7 +455,7 @@ def mods_page_view(page: ft.Page):
             no_mods_content = ft.Column([
                 ft.Icon(ft.Icons.FOLDER_OFF, size=64, color=colors["text_secondary"]),
                 heading("未找到已下载的模组", level=3),
-                body("请先在创意工坊页面下载模组"),
+                body("请先在创意工坊页面下载模组，或在设置页面设置正确的游戏路径"),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=20)
             left_column.controls.append(no_mods_content)
         
