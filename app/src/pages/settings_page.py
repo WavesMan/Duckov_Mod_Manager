@@ -2,12 +2,17 @@
 import flet as ft
 import sys
 import os
+import logging
 
 # 添加src目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from theme_manager import get_theme_colors
-from config_manager import config_manager
+from services.theme_manager import get_theme_colors
+from services.config_manager import config_manager
+
+# 配置日志
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 def heading(text, level=1, color=None):
@@ -230,83 +235,139 @@ def settings_page_view(page: ft.Page):
     # 存储文件选择器实例，确保在页面切换后仍然可用
     file_pickers = {}
     
+    def show_error_dialog(message):
+        """显示错误对话框"""
+        logger.debug(f"显示错误对话框: {message}")
+        
+        def close_dialog(e):
+            logger.debug("关闭错误对话框")
+            dialog.open = False
+            page.update()
+        
+        # 创建对话框
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("错误"),
+            content=ft.Text(message),
+            actions=[
+                ft.TextButton("确定", on_click=close_dialog),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        
+        # 显示对话框
+        page.open(dialog)
+        logger.debug("错误对话框已显示")
+    
     def select_game_directory(e):
         """选择游戏目录"""
+        logger.debug("开始选择游戏目录")
+        
         def pick_game_dir_result(e: ft.FilePickerResultEvent):
+            logger.debug(f"游戏目录选择结果: path={e.path}")
             if e.path:
+                logger.debug(f"用户选择了路径: {e.path}")
                 # 检查路径是否包含"Escape from Duckov"文件夹
                 if "Escape from Duckov" in e.path:
+                    logger.debug("路径验证通过")
                     # 保存到配置管理器
                     config_manager.set("game_directory", e.path)
                     # 更新显示
                     game_directory_field.value = e.path
                     page.update()
+                    logger.debug("游戏目录已更新")
                 else:
+                    logger.debug("路径验证失败，不包含'Escape from Duckov'")
                     # 保存当前有效路径用于回退
                     previous_path = game_directory_field.value
-                    # 显示错误消息
-                    page.snack_bar = ft.SnackBar(
-                        content=ft.Text("请选择包含'Escape from Duckov'的路径"),
-                        bgcolor=ft.Colors.RED,
-                    )
-                    page.snack_bar.open = True
-                    page.update()
-                    # 等待消息显示后回退到之前的有效路径
-                    import time
-                    time.sleep(0.1)
+                    logger.debug(f"回退到之前的路径: {previous_path}")
+                    # 显示错误弹窗
+                    show_error_dialog("请选择包含'Escape from Duckov'的路径")
                     # 回退到之前的有效路径
                     game_directory_field.value = previous_path
                     page.update()
+                    logger.debug("已回退到之前的路径并更新界面")
             elif e.path is None:
                 # 用户取消选择，保持原路径不变
-                pass
+                logger.debug("用户取消了目录选择")
+            else:
+                logger.debug(f"未知的路径选择结果: {e.path}")
         
         # 创建或重用文件选择器
         if "game" not in file_pickers:
+            logger.debug("创建新的游戏目录文件选择器")
             file_picker = ft.FilePicker(on_result=pick_game_dir_result)
             file_pickers["game"] = file_picker
             page.overlay.append(file_picker)
             page.update()
+        else:
+            logger.debug("使用现有的游戏目录文件选择器")
         file_pickers["game"].get_directory_path(dialog_title="选择包含'Escape from Duckov'的目录")
+        logger.debug("已触发游戏目录选择对话框")
 
     def select_cache_directory(e):
         """选择缓存目录"""
+        logger.debug("开始选择缓存目录")
+        
         def pick_cache_dir_result(e: ft.FilePickerResultEvent):
+            logger.debug(f"缓存目录选择结果: path={e.path}")
             if e.path:
+                logger.debug(f"用户选择了缓存路径: {e.path}")
                 # 保存到配置管理器
                 config_manager.set("cache_directory", e.path)
                 # 更新显示
                 cache_directory_field.value = e.path
                 page.update()
+                logger.debug("缓存目录已更新")
+            elif e.path is None:
+                # 用户取消选择，保持原路径不变
+                logger.debug("用户取消了缓存目录选择")
         
         # 创建或重用文件选择器
         if "cache" not in file_pickers:
+            logger.debug("创建新的缓存目录文件选择器")
             file_picker = ft.FilePicker(on_result=pick_cache_dir_result)
             file_pickers["cache"] = file_picker
             page.overlay.append(file_picker)
             page.update()
+        else:
+            logger.debug("使用现有的缓存目录文件选择器")
         file_pickers["cache"].get_directory_path(dialog_title="选择缓存目录")
+        logger.debug("已触发缓存目录选择对话框")
 
     def select_temp_directory(e):
         """选择临时文件目录"""
+        logger.debug("开始选择临时文件目录")
+        
         def pick_temp_dir_result(e: ft.FilePickerResultEvent):
+            logger.debug(f"临时目录选择结果: path={e.path}")
             if e.path:
+                logger.debug(f"用户选择了临时路径: {e.path}")
                 # 保存到配置管理器
                 config_manager.set("temp_directory", e.path)
                 # 更新显示
                 temp_directory_field.value = e.path
                 page.update()
+                logger.debug("临时目录已更新")
+            elif e.path is None:
+                # 用户取消选择，保持原路径不变
+                logger.debug("用户取消了临时目录选择")
         
         # 创建或重用文件选择器
         if "temp" not in file_pickers:
+            logger.debug("创建新的临时目录文件选择器")
             file_picker = ft.FilePicker(on_result=pick_temp_dir_result)
             file_pickers["temp"] = file_picker
             page.overlay.append(file_picker)
             page.update()
+        else:
+            logger.debug("使用现有的临时目录文件选择器")
         file_pickers["temp"].get_directory_path(dialog_title="选择临时文件目录")
+        logger.debug("已触发临时目录选择对话框")
 
     def save_settings(e):
         """保存设置"""
+        logger.debug("开始保存设置")
         # 保存所有配置项到配置管理器
         config_manager.set("language", language_dropdown.value)
         config_manager.set("auto_update", auto_update_checkbox.value)
@@ -320,9 +381,11 @@ def settings_page_view(page: ft.Page):
         )
         page.snack_bar.open = True
         page.update()
+        logger.debug("设置已保存并显示提示消息")
     
     def reset_settings(e):
         """恢复默认设置"""
+        logger.debug("开始恢复默认设置")
         # 重置配置管理器到默认值
         config_manager.reset_to_default()
         
@@ -336,6 +399,7 @@ def settings_page_view(page: ft.Page):
         enable_animations_checkbox.value = config_manager.get("enable_animations")
         
         page.update()
+        logger.debug("默认设置已恢复并更新界面")
         
         # 显示恢复默认值的消息
         page.snack_bar = ft.SnackBar(
@@ -473,4 +537,5 @@ def settings_page_view(page: ft.Page):
         spacing=0
     )
     
+    logger.debug("设置页面初始化完成")
     return main_layout

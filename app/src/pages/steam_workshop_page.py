@@ -6,10 +6,17 @@ import os
 # 添加src目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from theme_manager import get_theme_colors
+from services.theme_manager import get_theme_colors
 from services.steam_workshop_service import SteamWorkshopService
+from services.mod_manager import mod_manager
 import asyncio
 from typing import Dict, List, Optional
+import traceback
+import logging
+
+# 设置日志记录
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 def heading(text, level=1, color=None):
@@ -180,6 +187,7 @@ class SteamWorkshopPage:
         self.error_message = None
         self.top_button = None  # 回顶按钮
         self.scrollable_column = None  # 滚动列引用
+        self.download_status = None  # 下载状态显示控件
         
         # 初始化预加载
         self._init_preloading()
@@ -392,6 +400,9 @@ class SteamWorkshopPage:
         """创建单个模组卡片"""
         colors = get_theme_colors()
         
+        # 检查本地是否已下载该模组
+        is_downloaded = self._check_mod_installed(mod_info.get('id', ''))
+        
         # 模组标题
         title = heading(mod_info.get('name', '未知模组'), level=4)
         
@@ -410,6 +421,10 @@ class SteamWorkshopPage:
         # 订阅信息
         subscriptions = mod_info.get('subscriptions', 0)
         subscriptions_text = caption(f"订阅数: {subscriptions:,}") if subscriptions > 0 else caption("")
+        
+        # 下载状态 - 修复 KeyError: 'success' 问题
+        status_color = colors.get("secondary", colors["text_secondary"]) if is_downloaded else colors.get("error", colors["text_secondary"])
+        status_text = caption("已下载" if is_downloaded else "未下载", color=status_color)
         
         # 左侧图片部分 - 1:1比例显示
         preview_url = mod_info.get('preview_url', '')
@@ -435,7 +450,8 @@ class SteamWorkshopPage:
                 author_text,
                 description_text,
                 rating_text,
-                subscriptions_text
+                subscriptions_text,
+                status_text  # 添加下载状态显示
             ],
             spacing=4,
             expand=True,
@@ -448,11 +464,15 @@ class SteamWorkshopPage:
                 bgcolor=colors["primary"],
                 text_style=ft.TextStyle(font_family="MiSans")
             )),
-            ft.OutlinedButton("下载", width=80, height=30, style=ft.ButtonStyle(
-                color=colors["primary"],
-                side=ft.BorderSide(1, colors["primary"]),
-                text_style=ft.TextStyle(font_family="MiSans")
-            ))
+            ft.OutlinedButton("下载" if not is_downloaded else "已下载", 
+                             width=80, 
+                             height=30, 
+                             style=ft.ButtonStyle(
+                                 color=colors["primary"] if not is_downloaded else colors["text_secondary"],
+                                 side=ft.BorderSide(1, colors["primary"] if not is_downloaded else colors["text_secondary"]),
+                                 text_style=ft.TextStyle(font_family="MiSans")
+                             ),
+                             disabled=is_downloaded)
         ]
         
         # 按钮行
@@ -488,6 +508,14 @@ class SteamWorkshopPage:
             ),
             margin=5,
         )
+
+    def _check_mod_installed(self, mod_id: str) -> bool:
+        """检查模组是否已下载"""
+        if not mod_id:
+            return False
+            
+        # 使用模组管理器检查模组是否已下载
+        return mod_manager.is_mod_downloaded(mod_id)
 
     def _create_items_grid(self, items: List[Dict]) -> ft.Control:
         """创建模组展示网格"""
@@ -581,6 +609,10 @@ class SteamWorkshopPage:
 
     def _create_error_message(self, message: str) -> ft.Control:
         """创建错误消息"""
+        # 处理特殊情况：如果错误消息是'success'，则替换为更友好的提示
+        if message == 'success' or "'success'" in message:
+            message = "加载过程中出现未知错误"
+            
         return ft.Column(
             controls=[
                 ft.Icon(ft.Icons.ERROR_OUTLINE, size=48, color="red"),
@@ -654,6 +686,22 @@ class SteamWorkshopPage:
             if result:
                 self.current_data.update(result)
                 
+                # 添加日志记录当前显示的在线mods信息
+                print(f"当前显示的在线mods信息 (共{len(result.get('items', []))}个):")
+                for i, item in enumerate(result.get('items', [])):
+                    mod_id = item.get('id', '未知ID')
+                    mod_name = item.get('name', '未知名称')
+                    mod_author = item.get('author', '未知作者')
+                    # 检查mod是否已下载
+                    is_downloaded = mod_manager.is_mod_downloaded(mod_id)
+                    status = "已下载" if is_downloaded else "未下载"
+                    print(f"  {i+1}. ID: {mod_id}, 名称: {mod_name}, 作者: {mod_author}, 状态: {status}")
+                
+                # 更新下载状态显示
+                downloaded_mods = mod_manager.get_downloaded_mods()
+                downloaded_count = len(downloaded_mods)
+                self.download_status.content.controls[1].value = f"已下载模组: {downloaded_count}"
+                
                 # 更新UI
                 self.items_grid.content = self._create_items_grid(result['items'])
                 self.pagination_controls.content = self._create_pagination_controls()
@@ -679,7 +727,14 @@ class SteamWorkshopPage:
         except Exception as e:
             self.loading_indicator.visible = False
             self.error_message.visible = True
-            self.error_message.content = self._create_error_message(f"加载失败: {str(e)}")
+            # 记录详细的异常信息用于调试
+            error_details = f"Error type: {type(e)}, Error message: {str(e)}, Traceback: {traceback.format_exc()}"
+            logger.error(f"加载创意工坊项目时出错: {error_details}")
+            # 特殊处理'success'字符串异常
+            error_message = str(e)
+            if error_message == 'success':
+                error_message = "未知错误"
+            self.error_message.content = self._create_error_message(f"加载失败: {error_message}")
         
         self.page.update()
 
@@ -703,6 +758,21 @@ class SteamWorkshopPage:
     def create_view(self) -> ft.Control:
         """创建页面视图"""
         colors = get_theme_colors()
+        
+        # 创建用户下载状态显示控件
+        self.download_status = ft.Container(
+            content=ft.Row(
+                controls=[
+                    ft.Icon(ft.Icons.DOWNLOAD_DONE, color=colors["primary"]),
+                    ft.Text("已下载模组: 0", size=14, color=colors["text_primary"]),
+                ],
+                spacing=5,
+                alignment=ft.MainAxisAlignment.START,
+            ),
+            padding=ft.padding.symmetric(horizontal=10, vertical=5),
+            border_radius=20,
+            bgcolor=colors["surface"],
+        )
         
         # 创建控件
         search_controls = self._create_search_controls()
@@ -729,6 +799,9 @@ class SteamWorkshopPage:
             body("浏览和下载Duckov游戏的创意工坊模组"),
             
             ft.Divider(height=20),
+            
+            # 添加下载状态显示
+            self.download_status,
             
             search_controls,
             

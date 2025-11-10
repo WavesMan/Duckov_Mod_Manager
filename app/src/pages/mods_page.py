@@ -6,7 +6,7 @@ import os
 # 添加src目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from theme_manager import get_theme_colors
+from services.theme_manager import get_theme_colors
 
 
 def heading(text, level=1, color=None):

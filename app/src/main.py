@@ -9,9 +9,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # 导入页面模块
 from pages import home_page, mods_page, downloads_page, settings_page
 from pages.steam_workshop_page import steam_workshop_view
-from app_routes import AppRoutes, NAVIGATION_ITEMS
-from theme_manager import get_theme_colors
-from config_manager import config_manager
+from services.app_routes import AppRoutes, NAVIGATION_ITEMS
+from services.theme_manager import get_theme_colors
 
 
 def heading(text, level=1, color=None):
@@ -72,7 +71,7 @@ def body(text, size=14, color=None, weight=ft.FontWeight.NORMAL):
 
 def create_app_layout(page: ft.Page, title: str = "Application"):
     """创建应用程序布局的便捷函数"""
-    from app_layout import create_app_layout
+    from services.app_layout import create_app_layout
     return create_app_layout(page, title)
 
 

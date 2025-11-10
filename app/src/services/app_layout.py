@@ -1,6 +1,6 @@
 # app_layout.py
 import flet as ft
-from theme_manager import get_theme_colors
+from .theme_manager import get_theme_colors
 
 
 class AppLayout:
