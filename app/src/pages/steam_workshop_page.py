@@ -9,10 +9,12 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from services.theme_manager import get_theme_colors
 from services.steam_workshop_service import SteamWorkshopService
 from services.mod_manager import mod_manager
+from services.config_manager import config_manager
 import asyncio
 from typing import Dict, List, Optional
 import traceback
 import logging
+import webbrowser
 
 # 设置日志记录
 logging.basicConfig(level=logging.DEBUG)
@@ -400,8 +402,8 @@ class SteamWorkshopPage:
         """创建单个模组卡片"""
         colors = get_theme_colors()
         
-        # 检查本地是否已下载该模组
-        is_downloaded = self._check_mod_installed(mod_info.get('id', ''))
+        # 检查本地是否已订阅该模组
+        is_subscribed = self._check_mod_installed(mod_info.get('id', ''))
         
         # 模组标题
         title = heading(mod_info.get('name', '未知模组'), level=4)
@@ -422,9 +424,9 @@ class SteamWorkshopPage:
         subscriptions = mod_info.get('subscriptions', 0)
         subscriptions_text = caption(f"订阅数: {subscriptions:,}") if subscriptions > 0 else caption("")
         
-        # 下载状态 - 修复 KeyError: 'success' 问题
-        status_color = colors.get("secondary", colors["text_secondary"]) if is_downloaded else colors.get("error", colors["text_secondary"])
-        status_text = caption("已下载" if is_downloaded else "未下载", color=status_color)
+        # 订阅状态 - 将"已下载/未下载"替换为"已订阅/未订阅"
+        status_color = colors.get("secondary", colors["text_secondary"]) if is_subscribed else colors.get("error", colors["text_secondary"])
+        status_text = caption("已订阅" if is_subscribed else "未订阅", color=status_color)
         
         # 左侧图片部分 - 1:1比例显示
         preview_url = mod_info.get('preview_url', '')
@@ -451,28 +453,45 @@ class SteamWorkshopPage:
                 description_text,
                 rating_text,
                 subscriptions_text,
-                status_text  # 添加下载状态显示
+                status_text  # 添加订阅状态显示
             ],
             spacing=4,
             expand=True,
         )
         
-        # 操作按钮
-        actions = [
-            ft.ElevatedButton("查看详情", width=100, height=30, style=ft.ButtonStyle(
+        # 模组URL
+        mod_url = mod_info.get('url', '')
+        
+        # 查看详情按钮 - 直接在浏览器中打开模组页面
+        view_details_button = ft.ElevatedButton(
+            "查看详情",
+            width=100,
+            height=30,
+            style=ft.ButtonStyle(
                 color=ft.Colors.WHITE,
                 bgcolor=colors["primary"],
                 text_style=ft.TextStyle(font_family="MiSans")
-            )),
-            ft.OutlinedButton("下载" if not is_downloaded else "已下载", 
-                             width=80, 
-                             height=30, 
-                             style=ft.ButtonStyle(
-                                 color=colors["primary"] if not is_downloaded else colors["text_secondary"],
-                                 side=ft.BorderSide(1, colors["primary"] if not is_downloaded else colors["text_secondary"]),
-                                 text_style=ft.TextStyle(font_family="MiSans")
-                             ),
-                             disabled=is_downloaded)
+            ),
+            on_click=lambda e, url=mod_url: self._open_mod_url(url) if url else None
+        )
+        
+        # 订阅/取消订阅按钮 - 根据订阅状态显示不同文本和颜色
+        subscribe_button = ft.ElevatedButton(
+            "取消订阅" if is_subscribed else "订阅",
+            width=100,
+            height=30,
+            style=ft.ButtonStyle(
+                color=ft.Colors.WHITE,  # 统一使用白色文本确保可见性
+                bgcolor=colors["error"] if is_subscribed else colors["primary"],
+                text_style=ft.TextStyle(font_family="MiSans")
+            ),
+            on_click=lambda e, url=mod_url: self._open_mod_url(url) if url else None
+        )
+        
+        # 操作按钮
+        actions = [
+            view_details_button,
+            subscribe_button
         ]
         
         # 按钮行
@@ -508,6 +527,34 @@ class SteamWorkshopPage:
             ),
             margin=5,
         )
+
+    def _toggle_subscription(self, mod_id: str):
+        """切换订阅状态"""
+        if not mod_id:
+            return
+            
+        # 检查当前订阅状态
+        is_currently_subscribed = mod_manager.is_mod_downloaded(mod_id)
+        
+        # 无论当前状态如何，都引导用户到Steam页面操作
+        # 查找该mod的信息
+        mod_info = None
+        for item in self.current_data.get('items', []):
+            if item.get('id') == mod_id:
+                mod_info = item
+                break
+        
+        if mod_info and mod_info.get('url'):
+            # 在浏览器中打开模组页面
+            self._open_mod_url(mod_info['url'])
+        else:
+            # 显示提示信息
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("无法找到模组页面信息，请刷新页面后重试"),
+                bgcolor=ft.Colors.RED
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
 
     def _check_mod_installed(self, mod_id: str) -> bool:
         """检查模组是否已下载"""
@@ -844,6 +891,35 @@ class SteamWorkshopPage:
             ],
             expand=True
         )
+
+    def _open_mod_url(self, url: str):
+        """在浏览器中打开模组URL"""
+        if url:
+            try:
+                webbrowser.open(url)
+                # 显示提示信息
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text("已在浏览器中打开模组页面"),
+                    bgcolor=ft.Colors.GREEN
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+            except Exception as e:
+                # 显示错误信息
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"打开页面失败: {str(e)}"),
+                    bgcolor=ft.Colors.RED
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+        else:
+            # URL无效时显示错误信息
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("无法打开模组页面：URL无效"),
+                bgcolor=ft.Colors.RED
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
 
 
 def steam_workshop_view(page: ft.Page):

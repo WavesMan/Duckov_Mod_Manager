@@ -7,7 +7,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # 导入页面模块
-from pages import home_page, mods_page, downloads_page, settings_page
+from pages import home_page, mods_page, settings_page
 from pages.steam_workshop_page import steam_workshop_view
 from services.app_routes import AppRoutes, NAVIGATION_ITEMS
 from services.theme_manager import get_theme_colors
@@ -120,8 +120,6 @@ def main(page: ft.Page):
             content = home_page.home_page_view(page)
         elif current_route == AppRoutes.MODS:
             content = mods_page.mods_page_view(page)
-        elif current_route == AppRoutes.DOWNLOADS:
-            content = downloads_page.downloads_page_view(page)
         elif current_route == AppRoutes.STEAM_WORKSHOP:
             content = steam_workshop_view(page)
         elif current_route == AppRoutes.SETTINGS:

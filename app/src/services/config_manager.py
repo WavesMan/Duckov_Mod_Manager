@@ -14,6 +14,7 @@ DEFAULT_CONFIG = {
     "auto_update": True,
     "minimize_to_tray": False,
     "enable_animations": True
+    # 移除了 steam_api_key 和 steam_id 配置项
 }
 
 

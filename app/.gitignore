@@ -162,3 +162,4 @@ cython_debug/
 # Flet
 storage/
 app_config.json
+/config/encryption.key

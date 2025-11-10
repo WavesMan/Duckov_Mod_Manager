@@ -366,13 +366,25 @@ def settings_page_view(page: ft.Page):
         logger.debug("已触发临时目录选择对话框")
 
     def save_settings(e):
-        """保存设置"""
-        logger.debug("开始保存设置")
-        # 保存所有配置项到配置管理器
-        config_manager.set("language", language_dropdown.value)
+        """
+        保存设置
+        """
+        logger.debug("正在保存设置")
+        
+        # 保存常规设置
         config_manager.set("auto_update", auto_update_checkbox.value)
         config_manager.set("minimize_to_tray", minimize_to_tray_checkbox.value)
+        config_manager.set("language", language_dropdown.value)
         config_manager.set("enable_animations", enable_animations_checkbox.value)
+        
+        # 保存目录设置
+        config_manager.set("game_directory", game_directory_field.value)
+        config_manager.set("cache_directory", cache_directory_field.value)
+        config_manager.set("temp_directory", temp_directory_field.value)
+        
+        # 更新页面以反映更改
+        page.update()
+        logger.debug("设置已保存并更新界面")
         
         # 显示保存成功的消息
         page.snack_bar = ft.SnackBar(
@@ -381,7 +393,6 @@ def settings_page_view(page: ft.Page):
         )
         page.snack_bar.open = True
         page.update()
-        logger.debug("设置已保存并显示提示消息")
     
     def reset_settings(e):
         """恢复默认设置"""
@@ -442,11 +453,6 @@ def settings_page_view(page: ft.Page):
         width=400
     )
     
-    enable_animations_checkbox = ft.Checkbox(
-        label="启用动画效果",
-        value=config_manager.get("enable_animations")
-    )
-    
     # 创建设置表单（不含操作按钮）
     settings_form = ft.Column(
         controls=[
@@ -464,36 +470,12 @@ def settings_page_view(page: ft.Page):
                 alignment=ft.MainAxisAlignment.START,
                 spacing=10
             ),
-
-            ft.Divider(height=20),
-            
-            heading("存储设置", level=2),
-            
-            ft.Row(
-                controls=[
-                    cache_directory_field,
-                    primary_button("浏览...", on_click=select_cache_directory, width=100)
-                ],
-                alignment=ft.MainAxisAlignment.START,
-                spacing=10
-            ),
-            
-            ft.Row(
-                controls=[
-                    temp_directory_field,
-                    primary_button("浏览...", on_click=select_temp_directory, width=100)
-                ],
-                alignment=ft.MainAxisAlignment.START,
-                spacing=10
-            ),
             
             ft.Divider(height=20),
             
             heading("界面设置", level=2),
             
             language_dropdown,
-            
-            enable_animations_checkbox,
             
             ft.Divider(height=20),
 

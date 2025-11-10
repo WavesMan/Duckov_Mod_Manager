@@ -9,6 +9,7 @@ authors = [
 ]
 dependencies = [
   "bs4>=0.0.2",
+  "cryptography>=46.0.3",
   "darkdetect>=0.8.0",
   "flet[all]==0.28.3",
   "requests>=2.25.0",
