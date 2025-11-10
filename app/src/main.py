@@ -9,8 +9,11 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # 导入页面模块
 from pages import home_page, mods_page, settings_page
 from pages.steam_workshop_page import steam_workshop_view
+from pages.update_page import update_page_view
 from services.app_routes import AppRoutes, NAVIGATION_ITEMS
 from services.theme_manager import get_theme_colors
+from services.config_manager import config_manager
+from services.version_manager import version_manager
 
 
 def heading(text, level=1, color=None):
@@ -77,7 +80,7 @@ def create_app_layout(page: ft.Page, title: str = "Application"):
 
 def main(page: ft.Page):
     # 设置页面标题
-    page.title = "Duckov 模组管理器"
+    page.title = "Duckov Mod Manager"
     
     # 设置窗口大小
     page.window_width = 1000
@@ -105,7 +108,7 @@ def main(page: ft.Page):
     print("- 正在尝试应用MiSans字体到整个应用...")
     
     # 初始化应用布局
-    app_layout = create_app_layout(page, "Duckov 模组管理器")
+    app_layout = create_app_layout(page, "Duckov Mod Manager")
     
     # 存储当前路由
     current_route = AppRoutes.HOME
@@ -124,6 +127,8 @@ def main(page: ft.Page):
             content = steam_workshop_view(page)
         elif current_route == AppRoutes.SETTINGS:
             content = settings_page.settings_page_view(page)
+        elif current_route == AppRoutes.UPDATE:
+            content = update_page_view(page)
         else:
             content = ft.Column([
                 heading("页面未找到", level=1),
@@ -136,6 +141,44 @@ def main(page: ft.Page):
     def navigate_to(route):
         page.go(route)
     
+    # 自动检查更新功能
+    def auto_check_for_updates():
+        """启动时自动检查更新"""
+        # 检查是否启用了自动更新检查
+        if config_manager.get("auto_update", True):
+            print("自动检查更新已启用，正在检查更新...")
+            
+            def check_update_task():
+                try:
+                    # 检查更新
+                    update_result = version_manager.check_for_updates()
+                    
+                    # 如果有更新且不是被跳过的版本，则跳转到更新页面
+                    if update_result.get('has_update'):
+                        skipped_version = config_manager.get("skip_version")
+                        latest_version = update_result.get('latest_version')
+                        
+                        # 如果没有跳过该版本，则显示更新提示
+                        if skipped_version != latest_version:
+                            # 将更新信息存储到会话中
+                            page.session.set("update_info", update_result)
+                            # 跳转到更新页面
+                            page.go("/update")
+                            page.update()
+                            print(f"发现新版本: {latest_version}")
+                        else:
+                            print(f"发现新版本 {latest_version}，但已被用户跳过")
+                    else:
+                        print("当前已是最新版本")
+                        
+                except Exception as e:
+                    print(f"自动检查更新时发生错误: {e}")
+            
+            # 在后台线程中执行检查更新任务
+            page.run_thread(check_update_task)
+        else:
+            print("自动检查更新已禁用")
+
     # 为侧边栏添加导航项
     for item_data in NAVIGATION_ITEMS:
         # 修复图标引用问题
@@ -154,6 +197,17 @@ def main(page: ft.Page):
     
     # 初始化导航到主页
     page.go(AppRoutes.HOME)
+    
+    # 在应用启动后稍延迟执行自动检查更新
+    def delayed_auto_check():
+        import time
+        time.sleep(2)  # 等待2秒确保UI加载完成
+        auto_check_for_updates()
+    
+    # 启动自动检查更新线程
+    import threading
+    auto_check_thread = threading.Thread(target=delayed_auto_check, daemon=True)
+    auto_check_thread.start()
 
 
 ft.app(main)

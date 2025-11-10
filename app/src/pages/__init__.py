@@ -1,3 +1,6 @@
-# pages/__init__.py
+"""页面模块初始化文件"""
 
-# This file makes the pages directory a Python package
+from .home_page import home_page_view
+from .mods_page import mods_page_view
+from .settings_page import settings_page_view
+from .update_page import update_page_view

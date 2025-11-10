@@ -3,12 +3,15 @@ import flet as ft
 import sys
 import os
 import logging
+import threading
 
 # 添加src目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from services.theme_manager import get_theme_colors
 from services.config_manager import config_manager
+from services.version_manager import version_manager
+from components.update_dialog import UpdateDialog
 
 # 配置日志
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -453,6 +456,77 @@ def settings_page_view(page: ft.Page):
     #     width=400
     # )
     
+    # 检查更新相关变量
+    update_dialog = UpdateDialog(page)
+    check_update_button = ft.ElevatedButton(
+        content=ft.Row(
+            [
+                ft.Icon(name=ft.Icons.UPDATE, color=get_theme_colors()["on_primary"]),
+                ft.Text("检查更新", font_family="MiSans", color=ft.Colors.BLACK, size=14)
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            spacing=5,
+        ),
+        style=ft.ButtonStyle(
+            bgcolor=get_theme_colors()["primary"],
+            padding=ft.Padding(20, 15, 20, 15)
+        ),
+        width=120,
+    )
+    
+    # 版本信息显示
+    version_info_text = caption(f"当前版本: v{config_manager.get('current_version', '0.1.0')}")
+    
+    def check_for_updates(e):
+        """检查更新功能"""
+        logger.info("开始检查更新")
+        
+        # 禁用按钮并显示加载状态
+        check_update_button.disabled = True
+        check_update_button.content.controls[1].value = "检查中..."
+        page.update()
+        
+        def update_check_thread():
+            """在后台线程中检查更新"""
+            try:
+                # 检查更新
+                update_result = version_manager.check_for_updates()
+                
+                # 更新最后检查时间
+                from datetime import datetime
+                config_manager.set("last_update_check", datetime.now().isoformat())
+                
+                # 直接在主线程中执行UI更新操作
+                # 恢复按钮状态
+                check_update_button.disabled = False
+                check_update_button.content.controls[1].value = "检查更新"
+                
+                # 将更新信息存储到会话中并跳转到更新页面
+                page.session.set("update_info", update_result)
+                page.go("/update")
+                page.update()
+                
+            except Exception as e:
+                logger.error(f"检查更新过程中发生错误: {e}")
+                
+                # 直接在主线程中执行错误处理
+                check_update_button.disabled = False
+                check_update_button.content.controls[1].value = "检查更新"
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"检查更新失败: {str(e)}"),
+                    bgcolor=ft.Colors.RED,
+                )
+                page.snack_bar.open = True
+                page.update()
+        
+        # 在后台线程中执行检查
+        thread = threading.Thread(target=update_check_thread)
+        thread.daemon = True
+        thread.start()
+    
+    # 绑定检查更新事件
+    check_update_button.on_click = check_for_updates
+    
     # 创建设置表单（不含操作按钮）
     settings_form = ft.Column(
         controls=[
@@ -481,22 +555,15 @@ def settings_page_view(page: ft.Page):
 
             heading("版本检查", level=2),
             
-            # 添加检查更新按钮，仿照主页launch_button的样式
-            ft.ElevatedButton(
-                content=ft.Row(
-                    [
-                        ft.Icon(name=ft.Icons.UPDATE, color=get_theme_colors()["on_primary"]),
-                        ft.Text("检查更新", font_family="MiSans", color=ft.Colors.BLACK, size=14)
-                    ],
-                    alignment=ft.MainAxisAlignment.CENTER,
-                    spacing=5,
-                ),
-                style=ft.ButtonStyle(
-                    bgcolor=get_theme_colors()["primary"],
-                    padding=ft.Padding(20, 15, 20, 15)
-                ),
-                width=120,
-                on_click=lambda e: print("检查更新功能占位")
+            version_info_text,
+            
+            ft.Row(
+                controls=[
+                    check_update_button,
+                    caption("点击检查最新版本", size=12)
+                ],
+                alignment=ft.MainAxisAlignment.START,
+                spacing=10
             ),
 
         ]

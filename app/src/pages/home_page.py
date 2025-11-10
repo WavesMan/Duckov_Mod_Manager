@@ -318,8 +318,8 @@ def home_page_view(page: ft.Page):
     
     # 创建主页内容
     content = [
-        heading("欢迎使用Duckov 模组管理器", level=1),
-        body("这是一个现代化的模组管理工具，可以帮助您轻松管理游戏模组。"),
+        heading("欢迎使用Duckov Mod Manager", level=1),
+        body("这是一个逃离鸭科夫的模组管理工具，可以帮助您轻松管理游戏模组。"),
         
         ft.Divider(height=20),
 

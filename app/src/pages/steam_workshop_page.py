@@ -843,7 +843,7 @@ class SteamWorkshopPage:
         # 页面内容
         content = [
             heading("Steam创意工坊", level=1),
-            body("浏览和下载Duckov游戏的创意工坊模组"),
+            body("浏览和下载 逃离鸭科夫 游戏的创意工坊模组"),
             
             ft.Divider(height=20),
             

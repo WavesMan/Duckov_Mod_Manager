@@ -8,6 +8,7 @@ class AppRoutes:
     MODS = "/mods"
     STEAM_WORKSHOP = "/steam-workshop"
     SETTINGS = "/settings"
+    UPDATE = "/update"
 
 
 # 路由映射到页面函数
@@ -16,6 +17,7 @@ ROUTES = {
     AppRoutes.MODS: "mods_page.mods_page_view",
     AppRoutes.STEAM_WORKSHOP: "steam_workshop_page.steam_workshop_view",
     AppRoutes.SETTINGS: "settings_page.settings_page_view",
+    AppRoutes.UPDATE: "update_page.update_page_view",
 }
 
 
