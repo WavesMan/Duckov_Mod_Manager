@@ -373,9 +373,9 @@ def settings_page_view(page: ft.Page):
         
         # 保存常规设置
         config_manager.set("auto_update", auto_update_checkbox.value)
-        config_manager.set("minimize_to_tray", minimize_to_tray_checkbox.value)
-        config_manager.set("language", language_dropdown.value)
-        config_manager.set("enable_animations", enable_animations_checkbox.value)
+        # config_manager.set("minimize_to_tray", minimize_to_tray_checkbox.value)
+        # config_manager.set("language", language_dropdown.value)
+        # config_manager.set("enable_animations", enable_animations_checkbox.value)
         
         # 保存目录设置
         config_manager.set("game_directory", game_directory_field.value)
@@ -404,10 +404,10 @@ def settings_page_view(page: ft.Page):
         game_directory_field.value = config_manager.get("game_directory")
         cache_directory_field.value = config_manager.get("cache_directory")
         temp_directory_field.value = config_manager.get("temp_directory")
-        language_dropdown.value = config_manager.get("language")
+        # language_dropdown.value = config_manager.get("language")
         auto_update_checkbox.value = config_manager.get("auto_update")
-        minimize_to_tray_checkbox.value = config_manager.get("minimize_to_tray")
-        enable_animations_checkbox.value = config_manager.get("enable_animations")
+        # minimize_to_tray_checkbox.value = config_manager.get("minimize_to_tray")
+        # enable_animations_checkbox.value = config_manager.get("enable_animations")
         
         page.update()
         logger.debug("默认设置已恢复并更新界面")
@@ -437,21 +437,21 @@ def settings_page_view(page: ft.Page):
         value=config_manager.get("auto_update")
     )
     
-    minimize_to_tray_checkbox = ft.Checkbox(
-        label="最小化到系统托盘",
-        value=config_manager.get("minimize_to_tray")
-    )
+    # minimize_to_tray_checkbox = ft.Checkbox(
+    #     label="最小化到系统托盘",
+    #     value=config_manager.get("minimize_to_tray")
+    # )
     
-    language_dropdown = ft.Dropdown(
-        label="语言",
-        options=[
-            ft.dropdown.Option("简体中文"),
-            ft.dropdown.Option("English"),
-            ft.dropdown.Option("日本語")
-        ],
-        value=config_manager.get("language"),
-        width=400
-    )
+    # language_dropdown = ft.Dropdown(
+    #     label="语言",
+    #     options=[
+    #         ft.dropdown.Option("简体中文"),
+    #         ft.dropdown.Option("English"),
+    #         ft.dropdown.Option("日本語")
+    #     ],
+    #     value=config_manager.get("language"),
+    #     width=400
+    # )
     
     # 创建设置表单（不含操作按钮）
     settings_form = ft.Column(
@@ -460,7 +460,7 @@ def settings_page_view(page: ft.Page):
             
             auto_update_checkbox,
             
-            minimize_to_tray_checkbox,
+            # minimize_to_tray_checkbox,
             
             ft.Row(
                 controls=[
@@ -471,16 +471,35 @@ def settings_page_view(page: ft.Page):
                 spacing=10
             ),
             
-            ft.Divider(height=20),
-            
-            heading("界面设置", level=2),
-            
-            language_dropdown,
+            # ft.Divider(height=20),
+            #
+            # heading("界面设置", level=2),
+            #
+            # language_dropdown,
             
             ft.Divider(height=20),
 
-        ],
-        spacing=15
+            heading("版本检查", level=2),
+            
+            # 添加检查更新按钮，仿照主页launch_button的样式
+            ft.ElevatedButton(
+                content=ft.Row(
+                    [
+                        ft.Icon(name=ft.Icons.UPDATE, color=get_theme_colors()["on_primary"]),
+                        ft.Text("检查更新", font_family="MiSans", color=ft.Colors.BLACK, size=14)
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    spacing=5,
+                ),
+                style=ft.ButtonStyle(
+                    bgcolor=get_theme_colors()["primary"],
+                    padding=ft.Padding(20, 15, 20, 15)
+                ),
+                width=120,
+                on_click=lambda e: print("检查更新功能占位")
+            ),
+
+        ]
     )
     
     # 创建页面内容，将操作按钮放在表单外部

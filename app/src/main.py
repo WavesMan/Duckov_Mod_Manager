@@ -86,7 +86,7 @@ def main(page: ft.Page):
     
     # 设置自定义字体
     page.fonts = {
-        "MiSans": "assets/fonts/MiSans-Regular.woff2"
+        "MiSans": "assets/fonts/MiSans-Regular.ttf"
     }
     
     # 应用主题设置并使用自定义字体

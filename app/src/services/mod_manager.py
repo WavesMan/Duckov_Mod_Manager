@@ -13,11 +13,21 @@ class ModManager:
     def __init__(self):
         self.workshop_path = None
         self._update_workshop_path()
-        
+        # 添加缓存变量
+        self._cached_mods = None
+        self._cache_valid = False
+    
     def _update_workshop_path(self):
         """更新创意工坊路径"""
         self.workshop_path = config_manager.get_steam_workshop_path()
         print(f"工作坊路径更新为: {self.workshop_path}")
+        # 路径改变时使缓存失效
+        self._invalidate_cache()
+    
+    def _invalidate_cache(self):
+        """使缓存失效"""
+        self._cache_valid = False
+        self._cached_mods = None
     
     def get_downloaded_mods(self) -> List[Dict[str, str]]:
         """
@@ -26,6 +36,11 @@ class ModManager:
         Returns:
             List[Dict[str, str]]: 已下载模组的列表，每个模组包含id和路径信息
         """
+        # 检查是否有有效缓存
+        if self._cache_valid and self._cached_mods is not None:
+            print("使用缓存的模组列表")
+            return self._cached_mods
+            
         self._update_workshop_path()
         
         if not self.workshop_path or not os.path.exists(self.workshop_path):
@@ -46,7 +61,36 @@ class ModManager:
             print(f"获取已下载模组时出错: {e}")
             
         print(f"找到 {len(downloaded_mods)} 个已下载的模组")
+        
+        # 缓存结果
+        self._cached_mods = downloaded_mods
+        self._cache_valid = True
+        
         return downloaded_mods
+    
+    def get_downloaded_mods_paginated(self, page: int, page_size: int = 16) -> tuple[List[Dict[str, str]], int]:
+        """
+        获取已下载的模组列表（分页版本）
+        
+        Args:
+            page (int): 页码（从1开始）
+            page_size (int): 每页数量，默认16
+            
+        Returns:
+            tuple[List[Dict[str, str]], int]: (模组列表, 总页数)
+        """
+        all_mods = self.get_downloaded_mods()
+        total_mods = len(all_mods)
+        total_pages = (total_mods + page_size - 1) // page_size  # 向上取整
+        
+        # 计算起始和结束索引
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        
+        # 切片获取当前页的模组
+        page_mods = all_mods[start_index:end_index]
+        
+        return page_mods, total_pages
     
     def _get_mod_info(self, mod_id: str, mod_path: str) -> Dict[str, str]:
         """
@@ -190,7 +234,7 @@ class ModManager:
             str: Global.json文件路径
         """
         # 获取用户数据目录
-        user_data_path = os.path.expandvars("%USERPROFILE%\AppData\LocalLow\TeamSoda\Duckov\Saves")
+        user_data_path = os.path.expandvars("%USERPROFILE%\\AppData\\LocalLow\\TeamSoda\\Duckov\\Saves")
         # 确保目录存在
         os.makedirs(user_data_path, exist_ok=True)
         return os.path.join(user_data_path, "Global.json")

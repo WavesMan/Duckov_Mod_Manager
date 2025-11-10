@@ -216,7 +216,7 @@ def _create_mod_card(mod_info: dict, page: ft.Page) -> ft.Control:
     
     # 状态信息
     status_color = colors["primary"] if is_enabled else colors["error"]
-    status_text = caption("已启用" if is_enabled else "已禁用", color=status_color)
+    status_text = caption("已启用" if is_enabled else "已禁用", color=status_color, size=20)
     
     # 查找预览图
     preview_image = None
@@ -382,21 +382,48 @@ def mods_page_view(page: ft.Page):
     # 获取主题颜色
     colors = get_theme_colors()
     
+    # 当前页码（从1开始）
+    current_page = 1
+    total_pages = 1
+    
     # 创建一个引用，用于更新模组列表
     mod_cards_container = ft.Column(spacing=10)
     
-    def refresh_mods_list(search_term=""):
-        """刷新模组列表"""
+    # 创建带动画效果的模组列表容器
+    mod_list_container = ft.Container(
+        content=mod_cards_container,
+        opacity=1,
+        animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT)
+    )
+    
+    # 页面信息文本
+    page_info_text = caption(f"第 {current_page} 页，共 {total_pages} 页")
+    page_info_text_top = caption(f"第 {current_page} 页，共 {total_pages} 页")  # 顶部页面信息
+    count_text = caption("总共 0 个模组")
+    
+    def refresh_mods_list(search_term="", page_num=1):
+        """刷新模组列表（分页版本）"""
+        nonlocal current_page, total_pages
+        
+        # 执行淡出动画
+        mod_list_container.opacity = 0
+        page.update()
+        
+        # 等待淡出动画完成
+        import time
+        time.sleep(0.25)  # 等待250ms动画完成
+        
         # 清空现有内容
         mod_cards_container.controls.clear()
         
-        # 获取已下载的模组
-        downloaded_mods = mod_manager.get_downloaded_mods()
+        # 获取已下载的模组（分页）
+        page_mods, total_pages = mod_manager.get_downloaded_mods_paginated(page_num, 16)
+        current_page = page_num
         
         # 如果有搜索词，进行过滤
         if search_term:
             filtered_mods = []
-            for mod_info in downloaded_mods:
+            for mod_info in page_mods:
                 # 获取模组名称和描述
                 mod_name = mod_info.get('display_name', mod_info.get('name', f'模组 {mod_info["id"]}'))
                 mod_description = mod_info.get('description', '')
@@ -404,14 +431,16 @@ def mods_page_view(page: ft.Page):
                 # 检查搜索词是否在名称或描述中
                 if search_term.lower() in mod_name.lower() or search_term.lower() in mod_description.lower():
                     filtered_mods.append(mod_info)
-            downloaded_mods = filtered_mods
+            page_mods = filtered_mods
+            # 重新计算总页数
+            total_pages = (len(page_mods) + 15) // 16  # 向上取整
         
         # 创建双列布局
         left_column = ft.Column(spacing=10, expand=True)
         right_column = ft.Column(spacing=10, expand=True)
         
         # 交替将模组卡片添加到左右两列
-        for i, mod_info in enumerate(downloaded_mods):
+        for i, mod_info in enumerate(page_mods):
             mod_card = _create_mod_card(mod_info, page)
             # 固定卡片尺寸
             mod_card.width = 500
@@ -422,7 +451,7 @@ def mods_page_view(page: ft.Page):
                 right_column.controls.append(mod_card)
         
         # 如果没有模组，显示提示信息
-        if not downloaded_mods:
+        if not page_mods:
             no_mods_content = ft.Column([
                 ft.Icon(ft.Icons.FOLDER_OFF, size=64, color=colors["text_secondary"]),
                 heading("未找到已下载的模组", level=3),
@@ -443,15 +472,89 @@ def mods_page_view(page: ft.Page):
         # 添加双列容器到主容器
         mod_cards_container.controls.append(columns_row)
         
+        # 更新页面信息
+        page_info_text.value = f"第 {current_page} 页，共 {total_pages} 页"
+        page_info_text_top.value = f"第 {current_page} 页，共 {total_pages} 页"
         # 更新总计信息
-        mod_count = len(downloaded_mods)
-        count_text.value = f"总共 {mod_count} 个模组"
+        all_mods = mod_manager.get_downloaded_mods()
+        count_text.value = f"总共 {len(all_mods)} 个模组"
+        
+        # 更新分页按钮状态
+        update_pagination_buttons()
+        
+        # 淡入动画
+        mod_list_container.opacity = 1
+        page.update()
+    
+    def update_pagination_buttons():
+        """更新分页按钮状态"""
+        # 更新上一页按钮
+        prev_button.disabled = (current_page <= 1)
+        prev_button_top.disabled = (current_page <= 1)
+        if current_page <= 1:
+            prev_button.style = ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=colors["text_secondary"],
+                text_style=ft.TextStyle(font_family="MiSans")
+            )
+            prev_button_top.style = ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=colors["text_secondary"],
+                text_style=ft.TextStyle(font_family="MiSans")
+            )
+        else:
+            prev_button.style = ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=colors["primary"],
+                text_style=ft.TextStyle(font_family="MiSans")
+            )
+            prev_button_top.style = ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=colors["primary"],
+                text_style=ft.TextStyle(font_family="MiSans")
+            )
+        
+        # 更新下一页按钮
+        next_button.disabled = (current_page >= total_pages)
+        next_button_top.disabled = (current_page >= total_pages)
+        if current_page >= total_pages:
+            next_button.style = ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=colors["text_secondary"],
+                text_style=ft.TextStyle(font_family="MiSans")
+            )
+            next_button_top.style = ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=colors["text_secondary"],
+                text_style=ft.TextStyle(font_family="MiSans")
+            )
+        else:
+            next_button.style = ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=colors["primary"],
+                text_style=ft.TextStyle(font_family="MiSans")
+            )
+            next_button_top.style = ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=colors["primary"],
+                text_style=ft.TextStyle(font_family="MiSans")
+            )
         
         page.update()
     
+    def on_prev_page(e):
+        """上一页按钮点击事件"""
+        if current_page > 1:
+            refresh_mods_list(search_box.value, current_page - 1)
+    
+    def on_next_page(e):
+        """下一页按钮点击事件"""
+        if current_page < total_pages:
+            refresh_mods_list(search_box.value, current_page + 1)
+    
     # 搜索框处理函数
     def on_search_change(e):
-        refresh_mods_list(e.control.value)
+        refresh_mods_list(e.control.value, 1)  # 搜索时回到第一页
     
     # 创建搜索框
     search_box = ft.TextField(
@@ -461,26 +564,72 @@ def mods_page_view(page: ft.Page):
     )
     
     # 创建刷新按钮
-    refresh_button = primary_button("刷新列表", on_click=lambda _: refresh_mods_list())
+    refresh_button = primary_button("刷新列表", on_click=lambda _: refresh_mods_list(search_box.value, current_page))
     
-    # 创建总计文本
-    count_text = caption("总共 0 个模组")
+    # 创建分页按钮
+    prev_button = ft.ElevatedButton(
+        text="上一页",
+        on_click=on_prev_page,
+        width=80,
+        disabled=(current_page <= 1)
+    )
+    
+    prev_button_top = ft.ElevatedButton(
+        text="上一页",
+        on_click=on_prev_page,
+        width=80,
+        disabled=(current_page <= 1)
+    )
+    
+    next_button = ft.ElevatedButton(
+        text="下一页",
+        on_click=on_next_page,
+        width=80,
+        disabled=(current_page >= total_pages)
+    )
+    
+    next_button_top = ft.ElevatedButton(
+        text="下一页",
+        on_click=on_next_page,
+        width=80,
+        disabled=(current_page >= total_pages)
+    )
     
     # 创建页面内容
     content = [
         heading("模组管理", level=1),
         body("在此页面您可以管理已下载的游戏模组。"),
+        body("启用/禁用模组需要重启游戏", color=ft.Colors.RED, size=20),
         
         ft.Divider(height=20),
         
         ft.Row([
             refresh_button,
             search_box,
+            search_box,
         ], spacing=10),
         
         ft.Divider(height=20),
         
-        mod_cards_container,
+        # 顶部分页控件
+        ft.Row([
+            prev_button_top,
+            page_info_text_top,
+            next_button_top
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=20),
+        
+        ft.Divider(height=20),
+        
+        mod_list_container,
+        
+        ft.Divider(height=20),
+        
+        # 底部分页控件
+        ft.Row([
+            prev_button,
+            page_info_text,
+            next_button
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=20),
         
         ft.Divider(height=20),
         
