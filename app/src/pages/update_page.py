@@ -159,7 +159,7 @@ def update_page_view(page: ft.Page):
                     alignment=ft.alignment.center
                 ),
                 ft.Container(
-                    content=ft.Text(f"当前版本: v{config_manager.get('current_version', '0.1.0')}", 
+                    content=ft.Text(f"当前版本: v{config_manager.get('current_version', '0.1.1')}", 
                                   size=14, 
                                   font_family="MiSans",
                                   color=colors["text_secondary"]),

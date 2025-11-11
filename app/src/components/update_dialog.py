@@ -258,7 +258,7 @@ class UpdateDialog:
     def _get_current_version(self) -> str:
         """获取当前版本"""
         from services.config_manager import config_manager
-        return config_manager.get("current_version", "0.1.0")
+        return config_manager.get("current_version", "0.1.1")
     
     def _perform_update(self, update_info: dict):
         """执行更新操作"""

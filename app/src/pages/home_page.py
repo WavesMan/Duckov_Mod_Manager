@@ -358,7 +358,7 @@ def home_page_view(page: ft.Page):
         
         ft.Divider(height=20),
         
-        caption("版本 0.1.0")
+        caption("版本 0.1.1")
     ]
     
     # 使用可滚动页面布局，默认左对齐

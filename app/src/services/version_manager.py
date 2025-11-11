@@ -20,7 +20,7 @@ class VersionManager:
         """获取当前应用版本"""
         # 从配置管理器中读取版本信息
         from services.config_manager import config_manager
-        return config_manager.get("current_version", "0.1.0")
+        return config_manager.get("current_version", "0.1.1")
     
     def format_version(self, version_str: str) -> str:
         """格式化版本字符串为标准格式 (major.minor.patch)"""

@@ -6,7 +6,7 @@ import os
 # 添加src目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from services.theme_manager import get_theme_colors
+from services.theme_manager import get_theme_colors, create_card
 from services.mod_manager import mod_manager
 
 
@@ -366,13 +366,7 @@ def _create_mod_card(mod_info: dict, page: ft.Page) -> ft.Control:
     )
     
     # 创建卡片
-    card = ft.Card(
-        content=ft.Container(
-            content=content_row,
-            padding=10,
-        ),
-        margin=5,
-    )
+    card = create_card(content_row, padding=10, margin=5)
     
     return card
 
@@ -545,26 +539,40 @@ def mods_page_view(page: ft.Page):
     def on_prev_page(e):
         """上一页按钮点击事件"""
         if current_page > 1:
-            refresh_mods_list(search_box.value, current_page - 1)
+            refresh_mods_list(search_box_top.value, current_page - 1)
     
     def on_next_page(e):
         """下一页按钮点击事件"""
         if current_page < total_pages:
-            refresh_mods_list(search_box.value, current_page + 1)
+            refresh_mods_list(search_box_top.value, current_page + 1)
     
     # 搜索框处理函数
     def on_search_change(e):
-        refresh_mods_list(e.control.value, 1)  # 搜索时回到第一页
+        # 同步两个搜索框的值
+        search_value = e.control.value
+        search_box_top.value = search_value
+        search_box_bottom.value = search_value
+        refresh_mods_list(search_value, 1)  # 搜索时回到第一页
     
-    # 创建搜索框
-    search_box = ft.TextField(
+    # 创建搜索框（顶部和底部各一个）
+    search_box_top = ft.TextField(
         label="搜索模组...",
         on_change=on_search_change,
         width=300,
+        label_style=ft.TextStyle(color=colors["text_primary"]), 
+        border_color="#999999"
+    )
+    
+    search_box_bottom = ft.TextField(
+        label="搜索模组...",
+        on_change=on_search_change,
+        width=300,
+        label_style=ft.TextStyle(color=colors["text_primary"]), 
+        border_color="#999999"
     )
     
     # 创建刷新按钮
-    refresh_button = primary_button("刷新列表", on_click=lambda _: refresh_mods_list(search_box.value, current_page))
+    refresh_button = primary_button("刷新列表", on_click=lambda _: refresh_mods_list(search_box_top.value, current_page))
     
     # 创建分页按钮
     prev_button = ft.ElevatedButton(
@@ -605,8 +613,7 @@ def mods_page_view(page: ft.Page):
         
         ft.Row([
             refresh_button,
-            search_box,
-            search_box,
+            search_box_top,
         ], spacing=10),
         
         ft.Divider(height=20),
@@ -630,6 +637,13 @@ def mods_page_view(page: ft.Page):
             page_info_text,
             next_button
         ], alignment=ft.MainAxisAlignment.CENTER, spacing=20),
+        
+        ft.Divider(height=20),
+        
+        # 底部搜索框
+        ft.Row([
+            search_box_bottom,
+        ], spacing=10),
         
         ft.Divider(height=20),
         

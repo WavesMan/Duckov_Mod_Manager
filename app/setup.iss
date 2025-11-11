@@ -4,8 +4,8 @@
 [Setup]
 ; 应用基本信息
 AppName=Duckov Mod Manager
-AppVersion=0.1.0
-AppVerName=Duckov Mod Manager 0.1.0
+AppVersion=0.1.1
+AppVerName=Duckov Mod Manager 0.1.1
 AppPublisher=Flet
 AppPublisherURL=https://flet.dev
 AppSupportURL=https://flet.dev
@@ -19,7 +19,7 @@ InfoBeforeFile=
 InfoAfterFile=
 ; 输出设置
 OutputDir=Releases
-OutputBaseFilename=DuckovModManager-Setup-0.1.0
+OutputBaseFilename=DuckovModManager-Setup-0.1.1
 SetupIconFile=
 Compression=lzma
 SolidCompression=yes

@@ -6,7 +6,7 @@ import os
 # 添加src目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from services.theme_manager import get_theme_colors
+from services.theme_manager import get_theme_colors, create_card, add_theme_listener, remove_theme_listener
 from services.steam_workshop_service import SteamWorkshopService
 from services.mod_manager import mod_manager
 from services.config_manager import config_manager
@@ -191,8 +191,36 @@ class SteamWorkshopPage:
         self.scrollable_column = None  # 滚动列引用
         self.download_status = None  # 下载状态显示控件
         
+        # 添加主题变化监听器
+        add_theme_listener(self._on_theme_changed)
+        
         # 初始化预加载
         self._init_preloading()
+
+    def _on_theme_changed(self):
+        """当主题发生变化时更新UI控件"""
+        colors = get_theme_colors()
+        
+        # 更新搜索框颜色
+        if self.search_field:
+            self.search_field.color = colors["text_primary"]
+            self.search_field.text_style = ft.TextStyle(color=colors["text_primary"])
+        
+        # 更新下拉框颜色
+        if self.sort_dropdown:
+            # 更新下拉框本身的颜色
+            self.sort_dropdown.color = colors["text_primary"]
+            self.sort_dropdown.bgcolor = colors["card_background"]
+            self.sort_dropdown.focused_bgcolor = colors["card_background"]
+            self.sort_dropdown.focused_color = colors["text_primary"]
+            self.sort_dropdown.text_style = ft.TextStyle(color=colors["text_primary"])
+            
+            # 更新下拉框选项的颜色
+            if self.sort_dropdown.options:
+                for option in self.sort_dropdown.options:
+                    option.style = ft.TextStyle(color=colors["text_primary"])
+            
+            self.page.update()
 
     def _init_preloading(self):
         """初始化预加载数据"""
@@ -357,22 +385,35 @@ class SteamWorkshopPage:
             icon=ft.Icons.SEARCH,
             on_submit=self._on_search,
             expand=True,
-            border_radius=8
+            border_radius=8,
+            color=colors["text_primary"],
+            label_style=ft.TextStyle(color=colors["text_primary"]),
+            border_color="#999999"  # 深一些的灰色边框
         )
         
         # 排序下拉框
         self.sort_dropdown = ft.Dropdown(
             label="排序方式",
             options=[
-                ft.dropdown.Option("most_popular", "最热门"),
-                ft.dropdown.Option("top_rated", "最高评分"),
-                ft.dropdown.Option("newest", "最新"),
-                ft.dropdown.Option("last_updated", "最近更新")
+                ft.dropdown.Option("most_popular", "最热门", 
+                                 style=ft.TextStyle(color=colors["text_primary"])),
+                ft.dropdown.Option("top_rated", "最高评分",
+                                 style=ft.TextStyle(color=colors["text_primary"])),
+                ft.dropdown.Option("newest", "最新",
+                                 style=ft.TextStyle(color=colors["text_primary"])),
+                ft.dropdown.Option("last_updated", "最近更新",
+                                 style=ft.TextStyle(color=colors["text_primary"]))
             ],
             value="most_popular",
             on_change=self._on_sort_change,
             width=150,
-            border_radius=8
+            border_radius=8,
+            color=colors["text_primary"],  # 设置字体颜色为主题色
+            bgcolor=colors["card_background"],  # 设置背景颜色为主题色
+            focused_bgcolor=colors["card_background"],  # 设置聚焦时背景颜色
+            focused_color=colors["text_primary"],  # 设置聚焦时字体颜色
+            label_style=ft.TextStyle(color=colors["text_primary"]),  # 设置下拉框内文本样式
+            border_color="#999999"
         )
         
         # 搜索按钮
@@ -519,14 +560,7 @@ class SteamWorkshopPage:
         )
         
         # 创建卡片
-        return ft.Card(
-            content=ft.Container(
-                content=content_row,
-                padding=10,
-                # 移除固定宽度，使卡片可以自适应布局
-            ),
-            margin=5,
-        )
+        return create_card(content_row, padding=10, margin=5)
 
     def _toggle_subscription(self, mod_id: str):
         """切换订阅状态"""
@@ -891,6 +925,11 @@ class SteamWorkshopPage:
             ],
             expand=True
         )
+
+    def will_unmount(self):
+        """页面卸载时清理资源"""
+        # 移除主题变化监听器
+        remove_theme_listener(self._on_theme_changed)
 
     def _open_mod_url(self, url: str):
         """在浏览器中打开模组URL"""

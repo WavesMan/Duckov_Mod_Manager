@@ -16,7 +16,7 @@ DEFAULT_CONFIG = {
     "enable_animations": True,
     # 版本检查相关配置
     "last_update_check": None,  # 最后检查更新时间
-    "current_version": "0.1.0",  # 当前应用版本
+    "current_version": "0.1.1",  # 当前应用版本
     "skip_version": None,  # 跳过的版本号
     # 移除了 steam_api_key 和 steam_id 配置项
 }
