@@ -5,6 +5,12 @@
 ## 关于 Duckov
 《逃离鸭科夫》(Escape from Duckov) 是一款搜打撤生存射击游戏，支持丰富的Mod系统。
 
+## 关于 ModManagerBridge
+
+这是一个ModManager的桥，用于实现游戏内的Mod Core与外部的数据交互
+
+ModManagerBridge的API规范文档参阅 [ModManagerBridge API](ModManagerBridge/ModManagerBridge/README.md)
+
 ## 关于 Duckov Mod Manager
 
 ### Mods来源
