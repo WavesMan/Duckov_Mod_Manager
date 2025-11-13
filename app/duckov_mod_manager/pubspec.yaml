@@ -28,6 +28,12 @@ dependencies:
   provider: ^6.1.1
   file_picker: ^5.0.1
   flutter_markdown: ^0.6.16+1
+  
+  # 添加合集管理依赖
+  rxdart: ^0.27.7
+  path_provider: ^2.1.1
+  path: ^1.9.0
+  uuid: ^4.2.1
 
 dev_dependencies:
   flutter_test:

@@ -8,6 +8,7 @@ import 'page/setting_page.dart';
 import 'services/preload_manager.dart';
 import 'services/config_manager.dart';
 import 'services/version_manager.dart';
+import 'services/collections/collection_service.dart';
 import 'page/update_page.dart';
 
 void main() {
@@ -48,7 +49,21 @@ class _MainAppLayoutState extends State<MainAppLayout> {
   @override
   void initState() {
     super.initState();
-    _checkForUpdatesOnStartup();
+    _initializeServices();
+  }
+  
+  /// 初始化应用所需的服务
+  Future<void> _initializeServices() async {
+    try {
+      // 初始化CollectionService
+      await collectionService.init();
+      debugPrint('CollectionService初始化成功');
+    } catch (e) {
+      debugPrint('CollectionService初始化失败: $e');
+    } finally {
+      // 无论CollectionService初始化是否成功，都继续检查更新
+      _checkForUpdatesOnStartup();
+    }
   }
 
   /// 启动时检查更新
