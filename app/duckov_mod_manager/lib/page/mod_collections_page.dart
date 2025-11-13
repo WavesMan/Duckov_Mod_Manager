@@ -6,6 +6,7 @@ import 'package:duckov_mod_manager/services/collections/mod_collection.dart' as 
 import 'package:duckov_mod_manager/services/collections/collection_service.dart';
 import 'package:duckov_mod_manager/services/collections/dialogs/collection_edit_dialog.dart';
 import 'package:duckov_mod_manager/services/collections/dialogs/exclusive_conflict_dialog.dart';
+import 'package:duckov_mod_manager/services/collections/dialogs/collection_details_dialog.dart';
 import '../services/mod_manager.dart';
 import '../services/theme_manager.dart';
 
@@ -87,12 +88,26 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
                 );
               }
               
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
-                itemCount: filteredCollections.length,
-                itemBuilder: (context, index) {
-                  return _buildCollectionCard(filteredCollections[index]);
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final screenWidth = constraints.maxWidth;
+                  final crossAxisCount = screenWidth > 800 ? 2 : 1;
+                  final childAspectRatio = crossAxisCount == 2 ? 1.6 : 1.5;
+                  
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      childAspectRatio: childAspectRatio,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 12,
+                    ),
+                    itemCount: filteredCollections.length,
+                    itemBuilder: (context, index) {
+                      return _buildCollectionCard(filteredCollections[index]);
+                    },
+                  );
                 },
               );
             },
@@ -137,95 +152,212 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
 
   Widget _buildCollectionCard(model.ModCollection collection) {
     return Card(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 2,
+      elevation: 3,
+      margin: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Padding(
-        padding: EdgeInsets.all(16),
+        padding: EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 合集标题和主要标签
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Text(
                     collection.name,
-                    style: ThemeManager.headingTextStyle(level: 3),
+                    style: ThemeManager.headingTextStyle(level: 4),
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Row(
-                  children: [
-                    if (collection.exclusive)
-                      Chip(
-                        label: Text('互斥'),
-                        backgroundColor: Colors.red.withOpacity(0.1),
-                        labelStyle: TextStyle(color: Colors.red),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    SizedBox(width: 8),
-                    Chip(
-                      label: Text('${collection.modIds.length}个模组'),
-                      backgroundColor: Colors.blue.withOpacity(0.1),
-                      visualDensity: VisualDensity.compact,
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: collection.exclusive 
+                        ? Colors.red.withOpacity(0.1) 
+                        : Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    collection.exclusive ? '互斥' : '常规',
+                    style: TextStyle(
+                      color: collection.exclusive ? Colors.red : Colors.green,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
+            
+            SizedBox(height: 6),
+            
+            // 模组数量标签
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.extension, size: 10, color: Colors.blue),
+                  SizedBox(width: 3),
+                  Text(
+                    '${collection.modIds.length}',
+                    style: TextStyle(
+                      color: Colors.blue,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
             SizedBox(height: 8),
-            Text(
-              collection.description,
-              style: ThemeManager.bodyTextStyle(size: 14),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            
+            // 描述文本
+            Container(
+              height: 45,
+              child: Text(
+                collection.description,
+                style: ThemeManager.bodyTextStyle(size: 12),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            SizedBox(height: 12),
-            Row(
-              children: [
-                Text(
-                  '创建于: ${_formatDate(collection.createdAt)}',
-                  style: ThemeManager.bodyTextStyle(size: 12, color: Colors.grey),
-                ),
-                Spacer(),
-                Text(
-                  '更新于: ${_formatDate(collection.updatedAt)}',
-                  style: ThemeManager.bodyTextStyle(size: 12, color: Colors.grey),
-                ),
-              ],
+            
+            SizedBox(height: 8),
+            
+            // 时间信息
+            Container(
+              padding: EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_today, size: 8, color: Colors.grey),
+                      SizedBox(width: 3),
+                      Text(
+                        '创建: ${_formatDate(collection.createdAt)}',
+                        style: ThemeManager.bodyTextStyle(
+                          size: 11,
+                          color: Colors.grey[600]
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 1),
+                  Row(
+                    children: [
+                      Icon(Icons.update, size: 8, color: Colors.grey),
+                      SizedBox(width: 3),
+                      Text(
+                        '更新: ${_formatDate(collection.updatedAt)}',
+                        style: ThemeManager.bodyTextStyle(
+                          size: 11,
+                          color: Colors.grey[600]
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            SizedBox(height: 12),
+            
+            SizedBox(height: 10),
+            
+            // 主要操作按钮组
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
+                  child: OutlinedButton.icon(
                     onPressed: () => _viewCollectionDetails(collection),
-                    child: Text('详情'),
+                    icon: Icon(Icons.info_outline, size: 12),
+                    label: Text('详情', style: TextStyle(fontSize: 15)),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
                   ),
                 ),
-                SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () async => await _enableCollection(collection),
-                  child: Text('启用'),
+                SizedBox(width: 4),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async => await _enableCollection(collection),
+                    icon: Icon(Icons.play_arrow, size: 12),
+                    label: Text('启用', style: TextStyle(fontSize: 15)),
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      backgroundColor: Colors.green,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
                 ),
-                SizedBox(width: 8),
-                PopupMenuButton<dynamic>(
-                  icon: Icon(Icons.more_vert),
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      child: Text('编辑合集'),
-                      onTap: () async => await _editCollection(collection),
+                SizedBox(width: 4),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async => await _disableCollection(collection),
+                    icon: Icon(Icons.stop, size: 12),
+                    label: Text('禁用', style: TextStyle(fontSize: 15)),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      foregroundColor: Colors.orange,
+                      side: BorderSide(color: Colors.orange),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
-                    PopupMenuItem(
-                      child: Text('禁用合集'),
-                      onTap: () async => await _disableCollection(collection),
+                  ),
+                ),
+              ],
+            ),
+            
+            SizedBox(height: 4),
+            
+            // 次要操作按钮组
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () async => await _editCollection(collection),
+                    icon: Icon(Icons.edit, size: 11),
+                    label: Text('编辑', style: TextStyle(fontSize: 15)),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(3),
+                      ),
                     ),
-                    PopupMenuDivider(),
-                    PopupMenuItem(
-                      child: Text('删除合集', style: TextStyle(color: Colors.red)),
-                      onTap: () async => await _deleteCollection(collection),
+                  ),
+                ),
+                SizedBox(width: 3),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () async => await _deleteCollection(collection),
+                    icon: Icon(Icons.delete_outline, size: 11),
+                    label: Text('删除', style: TextStyle(fontSize: 15, color: Colors.red)),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(3),
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -292,49 +424,20 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
     }
   }
 
-  void _viewCollectionDetails(model.ModCollection collection) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(collection.name),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('描述: ${collection.description}'),
-                SizedBox(height: 8),
-                Text('模组数量: ${collection.modIds.length}'),
-                SizedBox(height: 8),
-                Text('互斥模式: ${collection.exclusive ? '是' : '否'}'),
-                SizedBox(height: 8),
-                Text('创建时间: ${collection.createdAt.toString()}'),
-                SizedBox(height: 8),
-                Text('更新时间: ${collection.updatedAt.toString()}'),
-                SizedBox(height: 16),
-                Text('包含的模组ID列表:', style: TextStyle(fontWeight: FontWeight.bold)),
-                SizedBox(height: 8),
-                Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(collection.modIds.join('\n')),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('关闭'),
-            ),
-          ],
+  Future<void> _viewCollectionDetails(model.ModCollection collection) async {
+    try {
+      // 获取所有模组信息
+      final allMods = await modManager.getDownloadedMods();
+      
+      // 显示新的详情对话框
+      await showCollectionDetailsDialog(context, collection, allMods);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载模组详情失败: $e')),
         );
-      },
-    );
+      }
+    }
   }
 
   Future<void> _enableCollection(model.ModCollection collection) async {

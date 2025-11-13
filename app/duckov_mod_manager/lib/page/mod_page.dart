@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/mod_manager.dart';
 import '../services/theme_manager.dart';
+import '../services/bridge_sync_service.dart';
 
 class ModPage extends StatefulWidget {
   const ModPage({Key? key}) : super(key: key);
@@ -38,6 +39,27 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
   bool _isCheckingBridgeConnection = false;
   Timer? _bridgeStatusTimer;
   final Map<String, Future<bool>> _modStatusFutures = {};
+  
+  // 防重复提示相关状态
+  DateTime? _lastShowErrorDialogTime;
+  DateTime? _lastShowSuccessDialogTime;
+  final Duration _dialogCooldown = Duration(seconds: 5); // 对话框冷却时间
+  
+  // 自动重连相关状态
+  Timer? _autoReconnectTimer;
+  int _consecutiveFailureCount = 0;
+  DateTime? _lastConnectionCheckTime;
+  
+  // Bridge 同步服务相关状态
+  BridgeSyncService? _bridgeSyncService;
+  bool _isSyncInProgress = false;
+  String _syncProgressText = '';
+  double _syncProgress = 0.0;
+  
+  // 同步状态显示
+  String _lastSyncResult = '';
+  bool _showSyncSuccess = false;
+
 
   @override
   void initState() {
@@ -53,6 +75,9 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
     // 启动Bridge连接状态监控
     _startBridgeStatusMonitoring();
     
+    // 初始化Bridge同步服务
+    _initBridgeSyncService();
+    
     // 添加滚动监听器
     _scrollController.addListener(_scrollListener);
   }
@@ -62,7 +87,9 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
     _tabController.dispose();
     _scrollController.dispose();
     _bridgeStatusTimer?.cancel();
+    _autoReconnectTimer?.cancel();
     _modStatusFutures.clear();
+    _bridgeSyncService?.dispose();
     super.dispose();
   }
   
@@ -90,6 +117,31 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
     });
   }
 
+  // Bridge 连接状态变化处理
+  void _onBridgeConnectionChanged(bool isConnected) {
+    print('[ModPage]Bridge连接状态变化: ${isConnected ? "已连接" : "已断开"}');
+    
+    setState(() {
+      _isBridgeConnected = isConnected;
+    });
+    
+    // 不管连接还是断开，都清空缓存以确保数据一致性
+    print('[ModPage]清空缓存以确保数据一致性');
+    _modManager.invalidateCache(); // 清空缓存
+    
+    if (isConnected) {
+      print('[ModPage]Bridge连接恢复，重新加载模组');
+      _loadMods(); // 重新加载模组数据
+    } else {
+      print('[ModPage]Bridge连接断开，切换到本地模式并重新加载模组');
+      _loadMods(); // 重新加载模组数据（使用本地模式）
+      
+      // 断开时启动自动重连机制
+      _startAutoReconnect();
+    }
+  }
+
+  // 检查Bridge连接状态（带防抖和重复提示防护）
   Future<void> _checkBridgeConnection() async {
     if (_isCheckingBridgeConnection) return;
     
@@ -108,12 +160,17 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
           _isCheckingBridgeConnection = false;
         });
         
-        // 连接状态变化提示
+        // 连接状态变化提示（防止重复提示）
         if (wasConnected) {
-          _showSuccessDialog('Bridge API 连接已恢复');
-          _loadMods(); // 重新加载模组以使用Bridge API
+          print('[ModPage] Bridge连接恢复，停止自动重连');
+          _stopAutoReconnect(); // 停止自动重连
+          // 只有在3秒后才显示恢复提示，避免页面切换时的误判
+          _showSuccessDialogOnce('Bridge API 连接已恢复');
+          _onBridgeConnectionChanged(true);
         } else if (wasDisconnected) {
-          _showErrorDialog('Bridge API 连接已断开，将使用文件系统模式');
+          // 只有在连续多次失败后才显示断开提示
+          _showErrorDialogOnce('Bridge API 连接已断开，将使用文件系统模式');
+          _onBridgeConnectionChanged(false);
         }
       }
     } catch (e) {
@@ -127,7 +184,7 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
         
         // 如果之前连接成功，现在失败了，显示错误提示
         if (wasConnected) {
-          _showErrorDialog('Bridge API 连接错误: $e，已切换到文件系统模式');
+          _showErrorDialogOnce('Bridge API 连接错误: $e，已切换到文件系统模式');
         }
       }
     }
@@ -148,6 +205,76 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
         _isCheckingBridgeConnection = false;
       });
       _showErrorDialog('Bridge API 重连失败: $e');
+    }
+  }
+
+  // 初始化Bridge同步服务
+  void _initBridgeSyncService() {
+    try {
+      _bridgeSyncService = BridgeSyncService(
+        _modManager.bridgeClient,
+        _modManager,
+      );
+      
+      // 设置进度回调
+      _bridgeSyncService!.setProgressCallback((status, progress, message) {
+        if (mounted) {
+          setState(() {
+            _isSyncInProgress = status is SyncStatusStarted || 
+                                status is SyncStatusReadingLocal || 
+                                status is SyncStatusReadingRemote || 
+                                status is SyncStatusCalculating ||
+                                (status is SyncStatusEnabling) ||
+                                (status is SyncStatusDisabling);
+            _syncProgress = progress;
+            _syncProgressText = message;
+            
+            // 处理同步完成和错误状态
+            if (status is SyncStatusCompleted) {
+              final result = '同步完成 - 成功: ${status.success}, 失败: ${status.failed}';
+              _lastSyncResult = result;
+              _showSyncSuccess = true;
+              
+              // 3秒后隐藏成功消息
+              Timer(const Duration(seconds: 3), () {
+                if (mounted) {
+                  setState(() {
+                    _showSyncSuccess = false;
+                  });
+                }
+              });
+            } else if (status is SyncStatusError) {
+              _lastSyncResult = '同步失败: ${status.message}';
+              _showSyncSuccess = false;
+            }
+          });
+        }
+      });
+      
+      _bridgeSyncService!.start();
+      print('[ModPage] Bridge同步服务已启动');
+    } catch (e) {
+      print('[ModPage] Bridge同步服务初始化失败: $e');
+    }
+  }
+
+  // 手动触发Bridge同步
+  Future<void> _triggerManualSync() async {
+    if (_bridgeSyncService == null || !_isBridgeConnected) {
+      _showErrorDialog('Bridge API 未连接，无法同步');
+      return;
+    }
+
+    if (_isSyncInProgress) {
+      _showErrorDialog('同步正在进行中，请稍候');
+      return;
+    }
+
+    try {
+      await _bridgeSyncService!.forceSync();
+      _showSuccessDialog('手动同步完成');
+    } catch (e) {
+      _showErrorDialog('手动同步失败: $e');
     }
   }
 
@@ -320,6 +447,110 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
         ],
       ),
     );
+  }
+
+  // 防重复错误对话框
+  void _showErrorDialogOnce(String message) {
+    final now = DateTime.now();
+    // 检查是否需要冷却
+    if (_lastShowErrorDialogTime != null && 
+        now.difference(_lastShowErrorDialogTime!) < _dialogCooldown) {
+      print('[ModPage] 错误对话框冷却中，跳过显示: $message');
+      return;
+    }
+
+    // 更新最后显示时间
+    _lastShowErrorDialogTime = now;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('错误'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 防重复成功对话框
+  void _showSuccessDialogOnce(String message) {
+    final now = DateTime.now();
+    // 检查是否需要冷却
+    if (_lastShowSuccessDialogTime != null && 
+        now.difference(_lastShowSuccessDialogTime!) < _dialogCooldown) {
+      print('[ModPage] 成功对话框冷却中，跳过显示: $message');
+      return;
+    }
+
+    // 更新最后显示时间
+    _lastShowSuccessDialogTime = now;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('成功'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _loadMods(); // 重新加载模组列表
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 自动重连机制
+  void _startAutoReconnect() {
+    print('[ModPage] 启动自动重连机制');
+    
+    // 取消之前的自动重连定时器
+    _autoReconnectTimer?.cancel();
+    
+    // 重置连续失败计数
+    _consecutiveFailureCount = 0;
+    
+    // 设置自动重连定时器：每3秒尝试一次，最多尝试5次
+    _autoReconnectTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      if (_consecutiveFailureCount >= 5) {
+        print('[ModPage] 自动重连达到最大尝试次数，停止重连');
+        timer.cancel();
+        return;
+      }
+      
+      _consecutiveFailureCount++;
+      print('[ModPage] 自动重连尝试 ${_consecutiveFailureCount}/5');
+      
+      try {
+        // 检查连接状态
+        final isConnected = await _modManager.isBridgeConnected();
+        if (isConnected) {
+          print('[ModPage] 自动重连成功');
+          timer.cancel();
+          _consecutiveFailureCount = 0;
+          _isBridgeConnected = true;
+          // 重新加载模组列表
+          _loadMods();
+        } else {
+          print('[ModPage] 自动重连失败，将在下个周期重试');
+        }
+      } catch (e) {
+        print('[ModPage] 自动重连过程出错: $e');
+      }
+    });
+  }
+
+  // 停止自动重连机制
+  void _stopAutoReconnect() {
+    print('[ModPage] 停止自动重连机制');
+    _autoReconnectTimer?.cancel();
+    _consecutiveFailureCount = 0;
   }
 
 
@@ -638,6 +869,138 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
       );
     }
     return const SizedBox.shrink();
+  }
+
+  // 同步状态横幅
+  Widget _buildSyncStatusBanner() {
+    if (!_showSyncSuccess && _lastSyncResult.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
+    final isSuccess = _lastSyncResult.contains('完成');
+    final bgColor = isSuccess ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1);
+    final borderColor = isSuccess ? Colors.green : Colors.red;
+    final textColor = isSuccess ? Colors.green[700] : Colors.red[700];
+    final icon = isSuccess ? Icons.check_circle : Icons.error;
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        border: Border(
+          bottom: BorderSide(
+            color: borderColor,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: borderColor,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _lastSyncResult,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          if (!_showSyncSuccess) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _lastSyncResult = '';
+                });
+              },
+              icon: Icon(Icons.close, size: 16, color: textColor),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                minWidth: 16,
+                minHeight: 16,
+              ),
+              tooltip: '关闭',
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Bridge 同步进度条
+  Widget _buildSyncProgressBar() {
+    if (!_isSyncInProgress) return const SizedBox.shrink();
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.blue.withOpacity(0.1),
+        border: Border(
+          bottom: BorderSide(
+            color: Colors.blue,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.sync,
+                color: Colors.blue,
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Bridge 同步进行中',
+                style: TextStyle(
+                  color: Colors.blue,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+              const Spacer(),
+              if (_syncProgress > 0 && _syncProgress < 1.0)
+                Text(
+                  '${(_syncProgress * 100).toInt()}%',
+                  style: const TextStyle(
+                    color: Colors.blue,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+            ],
+          ),
+          if (_syncProgressText.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              _syncProgressText,
+              style: TextStyle(
+                color: Colors.blue[700],
+                fontSize: 11,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: _syncProgress,
+            backgroundColor: Colors.blue.withOpacity(0.3),
+            valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildBatchControls() {
@@ -973,6 +1336,26 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
         actions: [
           // Bridge API 连接状态
           _buildBridgeStatusIndicator(),
+          // 手动同步按钮
+          IconButton(
+            icon: Stack(
+              children: [
+                Icon(
+                  Icons.sync,
+                  color: _isBridgeConnected ? Colors.blue : Colors.grey,
+                ),
+                if (_isSyncInProgress)
+                  Positioned.fill(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                    ),
+                  ),
+              ],
+            ),
+            onPressed: _isBridgeConnected ? _triggerManualSync : null,
+            tooltip: _isSyncInProgress ? '同步进行中...' : '手动同步到游戏',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
@@ -987,6 +1370,10 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
       ),
       body: Column(
         children: [
+          // Bridge API 状态横幅
+          _buildBridgeStatusBanner(),
+          // 同步状态横幅
+          _buildSyncStatusBanner(),
           // 搜索和排序控件 - 减小内边距和间距
           Container(
             padding: const EdgeInsets.all(8.0),
@@ -998,6 +1385,8 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
               ],
             ),
           ),
+          // Bridge 同步进度条
+          _buildSyncProgressBar(),
           // 模组列表
           Expanded(
             child: TabBarView(

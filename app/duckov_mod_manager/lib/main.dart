@@ -9,6 +9,9 @@ import 'services/preload_manager.dart';
 import 'services/config_manager.dart';
 import 'services/version_manager.dart';
 import 'services/collections/collection_service.dart';
+import 'services/mod_manager.dart';
+import 'services/mod_manager_bridge_client.dart';
+import 'services/bridge_sync_service.dart';
 import 'page/update_page.dart';
 
 void main() {
@@ -45,11 +48,21 @@ class _MainAppLayoutState extends State<MainAppLayout> {
   
   // 用于避免动画堆积
   bool _isAnimating = false;
+  
+  // Bridge同步服务
+  BridgeSyncService? _bridgeSyncService;
 
   @override
   void initState() {
     super.initState();
     _initializeServices();
+  }
+  
+  @override
+  void dispose() {
+    // 清理Bridge同步服务资源
+    _bridgeSyncService?.dispose();
+    super.dispose();
   }
   
   /// 初始化应用所需的服务
@@ -58,11 +71,36 @@ class _MainAppLayoutState extends State<MainAppLayout> {
       // 初始化CollectionService
       await collectionService.init();
       debugPrint('CollectionService初始化成功');
+      
+      // 初始化Bridge同步服务
+      await _initializeBridgeSyncService();
+      
     } catch (e) {
-      debugPrint('CollectionService初始化失败: $e');
+      debugPrint('服务初始化失败: $e');
     } finally {
-      // 无论CollectionService初始化是否成功，都继续检查更新
+      // 无论服务初始化是否成功，都继续检查更新
       _checkForUpdatesOnStartup();
+    }
+  }
+  
+  /// 初始化Bridge同步服务
+  Future<void> _initializeBridgeSyncService() async {
+    try {
+      final modManager = ModManager();
+      final bridgeClient = ModManagerBridgeClient();
+      
+      // 等待Bridge客户端连接初始化
+      await bridgeClient.initialize();
+      
+      // 创建并启动Bridge同步服务
+      _bridgeSyncService = BridgeSyncService(bridgeClient, modManager);
+      _bridgeSyncService?.start();
+      
+      print('[MainApp] Bridge同步服务初始化成功');
+      
+    } catch (e) {
+      print('[MainApp] Bridge同步服务初始化失败: $e');
+      // Bridge同步服务失败不应该阻止应用启动
     }
   }
 

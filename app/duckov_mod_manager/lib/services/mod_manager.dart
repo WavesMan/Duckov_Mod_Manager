@@ -22,6 +22,7 @@ class ModInfo {
   final String description;
   final String version;
   final String size;
+  final String? author;
   final String? previewImagePath;
   final bool? enabled; // 添加enabled字段以支持Bridge API
 
@@ -33,6 +34,7 @@ class ModInfo {
     required this.description,
     required this.version,
     required this.size,
+    this.author,
     this.previewImagePath,
     this.enabled,
   });
@@ -45,6 +47,7 @@ class ModInfo {
     'description': description,
     'version': version,
     'size': size,
+    'author': author,
     'preview_image_path': previewImagePath,
   };
 
@@ -57,6 +60,7 @@ class ModInfo {
     String? description,
     String? version,
     String? size,
+    String? author,
     String? previewImagePath,
     bool? enabled, // Bridge API启用状态
   }) {
@@ -68,6 +72,7 @@ class ModInfo {
       description: description ?? this.description,
       version: version ?? this.version,
       size: size ?? this.size,
+      author: author ?? this.author,
       previewImagePath: previewImagePath ?? this.previewImagePath,
       enabled: enabled ?? this.enabled,
     );
@@ -313,12 +318,20 @@ class ModManager {
     return path.join(userProfile, 'AppData', 'LocalLow', 'TeamSoda', 'Duckov', 'Mods');
   }
 
+  /// 使缓存失效（对外暴露的公共方法）
+  void invalidateCache() {
+    _invalidateCache();
+  }
+
   /// 使缓存失效
   void _invalidateCache() {
     _cacheValid = false;
     _cachedMods = null;
     _localCacheValid = false;
     _cachedLocalMods = null;
+    // 同时失效Bridge状态缓存
+    _invalidateBridgeStateCache();
+    print('[ModManager]所有缓存已清空');
   }
 
   /// 强制刷新创意工坊路径（当用户更改游戏目录后调用）
@@ -406,6 +419,7 @@ class ModManager {
       description: '暂无描述',
       version: '1.0.0',
       size: await _getDirectorySize(modPath),
+      author: null,
       previewImagePath: null,
     );
 
@@ -437,6 +451,8 @@ class ModManager {
                   modInfo = modInfo.copyWith(description: value);
                 case 'version':
                   modInfo = modInfo.copyWith(version: value);
+                case 'author':
+                  modInfo = modInfo.copyWith(author: value);
               }
             }
           }
@@ -570,6 +586,7 @@ class ModManager {
       description: '本地模组 - 暂无描述',
       version: '1.0.0',
       size: await _getDirectorySize(modPath),
+      author: null,
       previewImagePath: null,
     );
 
@@ -601,6 +618,8 @@ class ModManager {
                   modInfo = modInfo.copyWith(description: value);
                 case 'version':
                   modInfo = modInfo.copyWith(version: value);
+                case 'author':
+                  modInfo = modInfo.copyWith(author: value);
               }
             }
           }
@@ -670,27 +689,7 @@ class ModManager {
   // Bridge API 集成方法
   // ===========================================
 
-  /// 获取Bridge API模组列表（实时状态）
-  Future<List<ModInfo>> getBridgeMods() async {
-    try {
-      final bridgeMods = await _bridgeClient.getModList();
-      return bridgeMods.map((bridgeMod) {
-        return ModInfo(
-          id: bridgeMod.id ?? bridgeMod.name,
-          path: '',
-          name: bridgeMod.name,
-          displayName: bridgeMod.name,
-          description: bridgeMod.description ?? '',
-          version: bridgeMod.version,
-          size: 'N/A',
-          previewImagePath: null,
-        );
-      }).toList();
-    } catch (e) {
-      print('[ModManager]获取Bridge模组列表失败: $e');
-      return [];
-    }
-  }
+
 
   /// 检查Bridge API模组是否启用
   Future<bool> isBridgeModEnabled(String modName) async {
@@ -709,7 +708,9 @@ class ModManager {
       final result = await _bridgeClient.enableMod(modName);
       if (result) {
         print('[ModManager]Bridge API成功启用模组: $modName');
-        _invalidateCache(); // 清除缓存以反映最新状态
+        // 直接更新Bridge状态缓存，避免重新从API获取
+        _updateBridgeModState(modName, true);
+        _invalidateCache(); // 清除常规缓存以反映最新状态
       }
       return result;
     } catch (e) {
@@ -724,7 +725,9 @@ class ModManager {
       final result = await _bridgeClient.disableMod(modName);
       if (result) {
         print('[ModManager]Bridge API成功禁用模组: $modName');
-        _invalidateCache(); // 清除缓存以反映最新状态
+        // 直接更新Bridge状态缓存，避免重新从API获取
+        _updateBridgeModState(modName, false);
+        _invalidateCache(); // 清除常规缓存以反映最新状态
       }
       return result;
     } catch (e) {
@@ -736,7 +739,17 @@ class ModManager {
   /// 批量操作Bridge API模组
   Future<Map<String, bool>> batchToggleBridgeMods(List<String> modNames, bool enable) async {
     try {
-      return await _bridgeClient.batchToggleMods(modNames, enable);
+      final results = await _bridgeClient.batchToggleMods(modNames, enable);
+      
+      // 更新Bridge状态缓存，只对成功的操作
+      for (final modName in modNames) {
+        if (results[modName] == true) {
+          _updateBridgeModState(modName, enable);
+        }
+      }
+      
+      print('[ModManager]Bridge API批量操作完成: ${enable ? '启用' : '禁用'} ${modNames.length}个模组');
+      return results;
     } catch (e) {
       print('[ModManager]Bridge API批量操作失败: $e');
       return {};
@@ -749,7 +762,9 @@ class ModManager {
       final result = await _bridgeClient.reloadAllMods();
       if (result) {
         print('[ModManager]Bridge API重新加载模组成功');
-        _invalidateCache(); // 清除缓存以反映最新状态
+        // 重新加载后需要重新初始化Bridge状态缓存
+        _invalidateBridgeStateCache();
+        _invalidateCache(); // 清除常规缓存以反映最新状态
       }
       return result;
     } catch (e) {
@@ -834,22 +849,29 @@ class ModManager {
   // 现有方法的Bridge集成扩展
   // ===========================================
 
-  /// 获取模组启用状态（支持Bridge API和文件系统）
+  /// 检查模组是否启用（混合模式支持）
   Future<bool> isModEnabled(String modId) async {
-    // 优先尝试Bridge API
-    if (await isBridgeAvailable()) {
-      try {
-        final isEnabled = await isBridgeModEnabled(modId);
-        print('[ModManager]Bridge API模组启用状态: $modId = $isEnabled');
-        return isEnabled;
-      } catch (e) {
-        print('[ModManager]Bridge API获取启用状态失败，回退到文件系统: $e');
-      }
+    final bestMode = await detectBestMode();
+    
+    switch (bestMode) {
+      case ModManagementMode.bridge:
+        // Bridge模式下，优先从Bridge状态缓存获取
+        final bridgeState = await _getBridgeModState(modId);
+        return bridgeState;
+        
+      case ModManagementMode.fileSystem:
+        // 文件系统模式下，从Global.json获取状态
+        return await _checkFileSystemModEnabled(modId);
+        
+      case ModManagementMode.hybrid:
+        // 混合模式下，Bridge可用则优先Bridge，否则使用文件系统
+        if (await isBridgeAvailable()) {
+          final bridgeState = await _getBridgeModState(modId);
+          return bridgeState;
+        } else {
+          return await _checkFileSystemModEnabled(modId);
+        }
     }
-
-    // 回退到文件系统模式
-    print('[ModManager]使用文件系统模式检查模组启用状态: $modId');
-    return _checkFileSystemModEnabled(modId);
   }
 
   /// 启用模组（支持Bridge API和文件系统）
@@ -1145,6 +1167,140 @@ class ModManager {
       return false;
     }
   }
+
+  /// 获取所有本地Mod的启用状态（用于Bridge同步）
+  Future<Map<String, bool>> getLocalEnabledState() async {
+    print('[ModManager]开始获取本地Mod启用状态');
+    final localState = <String, bool>{};
+    
+    try {
+      // 获取所有下载的Mod
+      final downloadedMods = await getDownloadedMods();
+      print('[ModManager]找到 ${downloadedMods.length} 个本地Mod');
+      
+      // 并发检查每个Mod的启用状态
+      final statusFutures = downloadedMods.map((mod) async {
+        try {
+          // 优先从文件系统获取状态
+          final isEnabled = await _getModEnabledStatusFromFile(mod.id);
+          return MapEntry(mod.id, isEnabled);
+        } catch (e) {
+          print('[ModManager]获取Mod ${mod.id} 状态失败: $e');
+          return MapEntry(mod.id, false);
+        }
+      });
+      
+      final results = await Future.wait(statusFutures);
+      
+      // 合并结果
+      for (final entry in results) {
+        localState[entry.key] = entry.value;
+      }
+      
+      final enabledCount = localState.values.where((enabled) => enabled).length;
+      print('[ModManager]本地状态获取完成: $enabledCount/${localState.length} 个Mod已启用');
+      
+    } catch (e) {
+      print('[ModManager]获取本地Mod状态失败: $e');
+    }
+    
+    return localState;
+  }
+
+  // ===== Bridge API 集成方法实现 =====
+
+  // ===== Bridge 模组状态缓存管理 =====
+  
+  /// Bridge 模组状态缓存 - 存储每个mod的启用状态
+  final Map<String, bool> _bridgeModStateCache = {};
+  bool _bridgeStateCacheValid = false;
+  
+  /// 初始化 Bridge 模组状态缓存
+  Future<void> _initializeBridgeStateCache() async {
+    print('[ModManager]初始化Bridge模组状态缓存');
+    _bridgeModStateCache.clear();
+    
+    try {
+      final bridgeMods = await _bridgeClient.getModList();
+      for (final bridgeMod in bridgeMods) {
+        _bridgeModStateCache[bridgeMod.name] = bridgeMod.enabled;
+        print('[ModManager]缓存模组状态: ${bridgeMod.name} = ${bridgeMod.enabled}');
+      }
+      _bridgeStateCacheValid = true;
+      print('[ModManager]Bridge状态缓存初始化完成，共 ${bridgeMods.length} 个模组');
+    } catch (e) {
+      print('[ModManager]初始化Bridge状态缓存失败: $e');
+      _bridgeStateCacheValid = false;
+    }
+  }
+  
+  /// 获取 Bridge 模组状态（优先从缓存获取）
+  Future<bool> _getBridgeModState(String modName) async {
+    if (_bridgeStateCacheValid && _bridgeModStateCache.containsKey(modName)) {
+      return _bridgeModStateCache[modName]!;
+    }
+    
+    // 缓存无效时重新获取
+    await _initializeBridgeStateCache();
+    return _bridgeModStateCache[modName] ?? false;
+  }
+  
+  /// 更新 Bridge 模组状态缓存
+  void _updateBridgeModState(String modName, bool enabled) {
+    _bridgeModStateCache[modName] = enabled;
+    print('[ModManager]更新模组状态缓存: $modName = $enabled');
+  }
+  
+  /// 使Bridge状态缓存失效
+  void _invalidateBridgeStateCache() {
+    _bridgeStateCacheValid = false;
+    _bridgeModStateCache.clear();
+    print('[ModManager]Bridge状态缓存已清空');
+  }
+  /// 获取Bridge API模组列表
+  Future<List<ModInfo>> getBridgeMods() async {
+    try {
+      print('[ModManager]开始获取Bridge API模组列表');
+      
+      // 确保Bridge状态缓存已初始化
+      if (!_bridgeStateCacheValid) {
+        await _initializeBridgeStateCache();
+      }
+      
+      final bridgeMods = await _bridgeClient.getModList();
+      print('[ModManager]从Bridge API获取到 ${bridgeMods.length} 个模组');
+      
+      final modInfoList = <ModInfo>[];
+      
+      for (final bridgeMod in bridgeMods) {
+        // 从缓存获取启用状态
+        final isEnabled = _bridgeModStateCache[bridgeMod.name] ?? bridgeMod.enabled;
+        _updateBridgeModState(bridgeMod.name, isEnabled); // 确保缓存同步
+        
+        // 使用异步方法获取标准模组信息
+        final standardModInfo = await bridgeMod.toStandardModInfoAsync();
+        final modInfo = ModInfo(
+          id: standardModInfo['id'] ?? '',
+          path: standardModInfo['path'] ?? '',
+          name: standardModInfo['name'] ?? '',
+          displayName: standardModInfo['displayName'] ?? '',
+          description: standardModInfo['description'] ?? '',
+          version: standardModInfo['version'] ?? '',
+          size: standardModInfo['size'] ?? '',
+          enabled: isEnabled, // 使用缓存中的启用状态
+          previewImagePath: standardModInfo['previewImagePath'],
+        );
+        modInfoList.add(modInfo);
+      }
+      
+      print('[ModManager]Bridge模组列表获取完成，包含启用状态');
+      return modInfoList;
+    } catch (e) {
+      print('[ModManager]获取Bridge模组列表失败: $e');
+      return [];
+    }
+  }
+
 }
 
 // 为ModInfo添加copyWith方法

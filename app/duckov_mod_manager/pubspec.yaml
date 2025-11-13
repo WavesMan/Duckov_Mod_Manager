@@ -38,8 +38,21 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.4
 
   flutter_lints: ^6.0.0
+
+flutter_launcher_icons:
+  image_path: "lib/assets/icon.png"
+  windows:
+    generate: true                  # 生成 .ico
+    # optional:
+    # icon_size: 256                # 默认 256，自动包含 16/32/48 等
+  android: false                    # 若暂不需要可关
+  ios: false
+  macos:
+    generate: false
+  linux: false
 
 flutter:
 
