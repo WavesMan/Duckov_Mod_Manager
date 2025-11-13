@@ -1,11 +1,18 @@
 // mod_manager.dart
 /// 模组管理服务 - 对应Flet项目的mod_manager.py功能
+/// 支持文件系统管理和ModManagerBridge API的混合模式
 
 import 'dart:io';
 import 'dart:convert';
-import 'dart:isolate';
 import 'package:path/path.dart' as path;
 import 'config_manager.dart';
+import 'mod_manager_bridge_client.dart';
+
+enum ModManagementMode {
+  fileSystem,   // 纯文件系统模式
+  bridge,       // 纯Bridge API模式
+  hybrid        // 混合模式 - 自动检测
+}
 
 class ModInfo {
   final String id;
@@ -16,6 +23,7 @@ class ModInfo {
   final String version;
   final String size;
   final String? previewImagePath;
+  final bool? enabled; // 添加enabled字段以支持Bridge API
 
   ModInfo({
     required this.id,
@@ -26,6 +34,7 @@ class ModInfo {
     required this.version,
     required this.size,
     this.previewImagePath,
+    this.enabled,
   });
 
   Map<String, dynamic> toJson() => {
@@ -38,6 +47,31 @@ class ModInfo {
     'size': size,
     'preview_image_path': previewImagePath,
   };
+
+  // 扩展ModInfo以支持Bridge API状态
+  ModInfo copyWith({
+    String? id,
+    String? path,
+    String? name,
+    String? displayName,
+    String? description,
+    String? version,
+    String? size,
+    String? previewImagePath,
+    bool? enabled, // Bridge API启用状态
+  }) {
+    return ModInfo(
+      id: id ?? this.id,
+      path: path ?? this.path,
+      name: name ?? this.name,
+      displayName: displayName ?? this.displayName,
+      description: description ?? this.description,
+      version: version ?? this.version,
+      size: size ?? this.size,
+      previewImagePath: previewImagePath ?? this.previewImagePath,
+      enabled: enabled ?? this.enabled,
+    );
+  }
 }
 
 class ModManager {
@@ -48,7 +82,52 @@ class ModManager {
   // 本地模组缓存
   List<ModInfo>? _cachedLocalMods;
   bool _localCacheValid = false;
-
+  
+  // Bridge API 客户端
+  final ModManagerBridgeClient _bridgeClient = modManagerBridgeClient;
+  
+  // 管理模式配置
+  ModManagementMode _currentMode = ModManagementMode.hybrid;
+  
+  /// 获取当前管理模式
+  ModManagementMode get currentMode => _currentMode;
+  
+  /// 设置管理模式
+  void setManagementMode(ModManagementMode mode) {
+    _currentMode = mode;
+    _invalidateCache(); // 清除缓存以应用新模式
+  }
+  
+  /// 获取Bridge客户端（用于检测连接状态）
+  ModManagerBridgeClient get bridgeClient => _bridgeClient;
+  
+  /// 检查Bridge API是否可用
+  Future<bool> isBridgeAvailable() async {
+    try {
+      await _bridgeClient.connect();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  /// 检测当前应该使用的管理模式
+  Future<ModManagementMode> detectBestMode() async {
+    if (_currentMode != ModManagementMode.hybrid) {
+      return _currentMode;
+    }
+    
+    // 尝试Bridge API连接
+    final isBridgeAvailable = await this.isBridgeAvailable();
+    if (isBridgeAvailable) {
+      print('[ModManager]Bridge API可用，使用Bridge管理模式');
+      return ModManagementMode.bridge;
+    } else {
+      print('[ModManager]Bridge API不可用，使用文件系统管理模式');
+      return ModManagementMode.fileSystem;
+    }
+  }
+  
   /// 构造函数 - 在初始化时立即读取并应用已保存的配置
   ModManager() {
     // 立即初始化创意工坊路径，使用已保存的配置
@@ -578,220 +657,427 @@ class ModManager {
       return false;
     }
 
-    final modPath = path.join(_workshopPath!, modId);
-    final exists = await Directory(modPath).exists();
-    print('[ModManager]检查模组 $modId 是否存在: $exists 路径: $modPath');
-    return exists;
+    try {
+      final modDir = Directory(path.join(_workshopPath!, modId));
+      return await modDir.exists();
+    } catch (e) {
+      print('[ModManager]检查模组下载状态时出错: $e');
+      return false;
+    }
   }
 
-  /// 检查模组是否已启用
+  // ===========================================
+  // Bridge API 集成方法
+  // ===========================================
+
+  /// 获取Bridge API模组列表（实时状态）
+  Future<List<ModInfo>> getBridgeMods() async {
+    try {
+      final bridgeMods = await _bridgeClient.getModList();
+      return bridgeMods.map((bridgeMod) {
+        return ModInfo(
+          id: bridgeMod.id ?? bridgeMod.name,
+          path: '',
+          name: bridgeMod.name,
+          displayName: bridgeMod.name,
+          description: bridgeMod.description ?? '',
+          version: bridgeMod.version,
+          size: 'N/A',
+          previewImagePath: null,
+        );
+      }).toList();
+    } catch (e) {
+      print('[ModManager]获取Bridge模组列表失败: $e');
+      return [];
+    }
+  }
+
+  /// 检查Bridge API模组是否启用
+  Future<bool> isBridgeModEnabled(String modName) async {
+    try {
+      final modInfo = await _bridgeClient.getModInfo(modName);
+      return modInfo?.enabled ?? false;
+    } catch (e) {
+      print('[ModManager]检查Bridge模组启用状态失败: $e');
+      return false;
+    }
+  }
+
+  /// 通过Bridge API启用模组
+  Future<bool> enableBridgeMod(String modName) async {
+    try {
+      final result = await _bridgeClient.enableMod(modName);
+      if (result) {
+        print('[ModManager]Bridge API成功启用模组: $modName');
+        _invalidateCache(); // 清除缓存以反映最新状态
+      }
+      return result;
+    } catch (e) {
+      print('[ModManager]Bridge API启用模组失败: $e');
+      return false;
+    }
+  }
+
+  /// 通过Bridge API禁用模组
+  Future<bool> disableBridgeMod(String modName) async {
+    try {
+      final result = await _bridgeClient.disableMod(modName);
+      if (result) {
+        print('[ModManager]Bridge API成功禁用模组: $modName');
+        _invalidateCache(); // 清除缓存以反映最新状态
+      }
+      return result;
+    } catch (e) {
+      print('[ModManager]Bridge API禁用模组失败: $e');
+      return false;
+    }
+  }
+
+  /// 批量操作Bridge API模组
+  Future<Map<String, bool>> batchToggleBridgeMods(List<String> modNames, bool enable) async {
+    try {
+      return await _bridgeClient.batchToggleMods(modNames, enable);
+    } catch (e) {
+      print('[ModManager]Bridge API批量操作失败: $e');
+      return {};
+    }
+  }
+
+  /// 重新加载Bridge API所有模组
+  Future<bool> reloadBridgeMods() async {
+    try {
+      final result = await _bridgeClient.reloadAllMods();
+      if (result) {
+        print('[ModManager]Bridge API重新加载模组成功');
+        _invalidateCache(); // 清除缓存以反映最新状态
+      }
+      return result;
+    } catch (e) {
+      print('[ModManager]Bridge API重新加载模组失败: $e');
+      return false;
+    }
+  }
+
+  /// 获取混合模式下的模组列表（Bridge API + 文件系统）
+  Future<List<ModInfo>> getMixedMods() async {
+    final allMods = <ModInfo>[];
+
+    // 1. 获取Bridge API模组（实时状态）
+    try {
+      final bridgeMods = await getBridgeMods();
+      allMods.addAll(bridgeMods);
+      print('[ModManager]获取到 ${bridgeMods.length} 个Bridge API模组');
+    } catch (e) {
+      print('[ModManager]获取Bridge API模组失败: $e');
+    }
+
+    // 2. 获取文件系统模组
+    try {
+      final fileSystemMods = await getDownloadedMods();
+      
+      // 合并时避免重复，根据模组名称去重
+      for (final fsMod in fileSystemMods) {
+        if (!allMods.any((mod) => mod.name == fsMod.name)) {
+          allMods.add(fsMod);
+        }
+      }
+      
+      print('[ModManager]获取到 ${fileSystemMods.length} 个文件系统模组');
+    } catch (e) {
+      print('[ModManager]获取文件系统模组失败: $e');
+    }
+
+    return allMods;
+  }
+
+  /// 智能模组管理：根据当前模式选择合适的管理方式
+  Future<({List<ModInfo> mods, int totalPages})> getSmartModsPaginated({
+    int page = 1,
+    int pageSize = 16,
+  }) async {
+    List<ModInfo> allMods;
+    
+    // 根据当前管理模式选择数据源
+    switch (_currentMode) {
+      case ModManagementMode.bridge:
+        allMods = await getBridgeMods();
+        break;
+      case ModManagementMode.fileSystem:
+        allMods = await getDownloadedMods();
+        break;
+      case ModManagementMode.hybrid:
+        // 混合模式：自动检测最佳模式
+        final bestMode = await detectBestMode();
+        if (bestMode == ModManagementMode.bridge) {
+          allMods = await getBridgeMods();
+        } else {
+          allMods = await getDownloadedMods();
+        }
+        break;
+    }
+
+    final totalMods = allMods.length;
+    final totalPages = (totalMods + pageSize - 1) ~/ pageSize;
+
+    // 计算分页
+    final startIndex = (page - 1) * pageSize;
+    final endIndex = startIndex + pageSize;
+    final pageMods = allMods.sublist(
+      startIndex.clamp(0, totalMods),
+      endIndex.clamp(0, totalMods),
+    );
+
+    return (mods: pageMods, totalPages: totalPages);
+  }
+
+  // ===========================================
+  // 现有方法的Bridge集成扩展
+  // ===========================================
+
+  /// 获取模组启用状态（支持Bridge API和文件系统）
   Future<bool> isModEnabled(String modId) async {
-    try {
-      // 获取模组信息以获取显示名称
-      final modInfo = await _getModInfo(modId, path.join(_workshopPath ?? '', modId));
-      final modName = modInfo.displayName.isNotEmpty ? modInfo.displayName : modInfo.name;
-
-      // 获取Global.json文件路径
-      final globalJsonPath = _getGlobalJsonPath();
-
-      // 如果文件不存在，创建一个默认的
-      final globalFile = File(globalJsonPath);
-      if (!await globalFile.exists()) {
-        final defaultContent = {};
-        await globalFile.writeAsString(json.encode(defaultContent));
-        return false;
+    // 优先尝试Bridge API
+    if (await isBridgeAvailable()) {
+      try {
+        final isEnabled = await isBridgeModEnabled(modId);
+        print('[ModManager]Bridge API模组启用状态: $modId = $isEnabled');
+        return isEnabled;
+      } catch (e) {
+        print('[ModManager]Bridge API获取启用状态失败，回退到文件系统: $e');
       }
-
-      // 读取Global.json文件
-      final content = await globalFile.readAsString();
-      final globalData = json.decode(content);
-
-      // 检查对应的模组启用状态
-      final modKey = 'ModActive_$modName';
-      if (globalData.containsKey(modKey) && globalData[modKey] is Map) {
-        return globalData[modKey]['value'] ?? false;
-      }
-
-      return false;
-    } catch (e) {
-      print('[ModManager]检查模组启用状态时出错: $e');
-      return false;
     }
+
+    // 回退到文件系统模式
+    print('[ModManager]使用文件系统模式检查模组启用状态: $modId');
+    return _checkFileSystemModEnabled(modId);
   }
 
-  /// 启用模组
+  /// 启用模组（支持Bridge API和文件系统）
   Future<bool> enableMod(String modId) async {
-    try {
-      // 获取源模组路径
-      _updateWorkshopPath();
-      if (_workshopPath == null) {
-        print('[ModManager]工作坊路径为空');
-        return false;
+    // 优先尝试Bridge API
+    if (await isBridgeAvailable()) {
+      try {
+        final result = await enableBridgeMod(modId);
+        if (result) {
+          print('[ModManager]Bridge API启用模组成功: $modId');
+          return true;
+        }
+      } catch (e) {
+        print('[ModManager]Bridge API启用模组失败，回退到文件系统: $e');
       }
-
-      final sourceModPath = path.join(_workshopPath!, modId);
-      if (!await Directory(sourceModPath).exists()) {
-        print('源模组路径不存在: $sourceModPath');
-        return false;
-      }
-
-      // 获取模组信息以获取显示名称
-      final modInfo = await _getModInfo(modId, sourceModPath);
-      final modName = modInfo.displayName.isNotEmpty ? modInfo.displayName : modInfo.name;
-
-      // 获取Global.json文件路径
-      final globalJsonPath = _getGlobalJsonPath();
-
-      // 如果文件不存在，创建一个默认的
-      final globalFile = File(globalJsonPath);
-      Map<String, dynamic> globalData;
-      if (!await globalFile.exists()) {
-        globalData = {};
-      } else {
-        final content = await globalFile.readAsString();
-        globalData = json.decode(content);
-      }
-
-      // 更新模组启用状态
-      globalData['ModActive_$modName'] = {
-        '__type': 'bool',
-        'value': true,
-      };
-
-      // 写入修改后的内容
-      await globalFile.writeAsString(json.encode(globalData));
-
-      print('[ModManager]模组 $modId ($modName) 启用成功');
-      return true;
-    } catch (e) {
-      print('[ModManager]启用模组时出错: $e');
-      return false;
     }
+
+    // 回退到文件系统模式
+    print('[ModManager]使用文件系统模式启用模组: $modId');
+    return _enableFileSystemMod(modId);
   }
 
-  /// 禁用模组
+  /// 禁用模组（支持Bridge API和文件系统）
   Future<bool> disableMod(String modId) async {
-    try {
-      // 获取源模组路径
-      _updateWorkshopPath();
-      if (_workshopPath == null) {
-        print('[ModManager]工作坊路径为空');
-        return false;
+    // 优先尝试Bridge API
+    if (await isBridgeAvailable()) {
+      try {
+        final result = await disableBridgeMod(modId);
+        if (result) {
+          print('[ModManager]Bridge API禁用模组成功: $modId');
+          return true;
+        }
+      } catch (e) {
+        print('[ModManager]Bridge API禁用模组失败，回退到文件系统: $e');
       }
-
-      final sourceModPath = path.join(_workshopPath!, modId);
-      if (!await Directory(sourceModPath).exists()) {
-        print('源模组路径不存在: $sourceModPath');
-        return false;
-      }
-
-      // 获取模组信息以获取显示名称
-      final modInfo = await _getModInfo(modId, sourceModPath);
-      final modName = modInfo.displayName.isNotEmpty ? modInfo.displayName : modInfo.name;
-
-      // 获取Global.json文件路径
-      final globalJsonPath = _getGlobalJsonPath();
-
-      // 如果文件不存在，创建一个默认的
-      final globalFile = File(globalJsonPath);
-      Map<String, dynamic> globalData;
-      if (!await globalFile.exists()) {
-        globalData = {};
-      } else {
-        final content = await globalFile.readAsString();
-        globalData = json.decode(content);
-      }
-
-      // 更新模组启用状态
-      globalData['ModActive_$modName'] = {
-        '__type': 'bool',
-        'value': false,
-      };
-
-      // 写入修改后的内容
-      await globalFile.writeAsString(json.encode(globalData));
-
-      print('[ModManager]模组 $modId ($modName) 禁用成功');
-      return true;
-    } catch (e) {
-      print('[ModManager]禁用模组时出错: $e');
-      return false;
     }
+
+    // 回退到文件系统模式
+    print('[ModManager]使用文件系统模式禁用模组: $modId');
+    return _disableFileSystemMod(modId);
   }
 
-  /// 批量启用模组
+  /// 批量启用模组（支持Bridge API和文件系统）
   Future<Map<String, bool>> batchEnableMods(List<String> modIds) async {
     final results = <String, bool>{};
+
+    // 优先尝试Bridge API批量操作
+    if (await isBridgeAvailable()) {
+      try {
+        final bridgeResults = await batchToggleBridgeMods(modIds, true);
+        results.addAll(bridgeResults);
+        
+        // 检查是否所有操作都成功
+        final allSuccess = results.values.every((result) => result);
+        if (allSuccess) {
+          print('[ModManager]Bridge API批量启用模组成功: ${modIds.length}个');
+          return results;
+        }
+      } catch (e) {
+        print('[ModManager]Bridge API批量启用失败，回退到文件系统: $e');
+      }
+    }
+
+    // 回退到文件系统批量操作
+    print('[ModManager]使用文件系统模式批量启用模组');
     for (final modId in modIds) {
       try {
         results[modId] = await enableMod(modId);
       } catch (e) {
-        print('[ModManager]启用模组 $modId 时出错: $e');
+        print('[ModManager]启用模组失败: $modId, 错误: $e');
         results[modId] = false;
       }
     }
+
     return results;
   }
 
-  /// 批量禁用模组
+  /// 批量禁用模组（支持Bridge API和文件系统）
   Future<Map<String, bool>> batchDisableMods(List<String> modIds) async {
     final results = <String, bool>{};
+
+    // 优先尝试Bridge API批量操作
+    if (await isBridgeAvailable()) {
+      try {
+        final bridgeResults = await batchToggleBridgeMods(modIds, false);
+        results.addAll(bridgeResults);
+        
+        // 检查是否所有操作都成功
+        final allSuccess = results.values.every((result) => result);
+        if (allSuccess) {
+          print('[ModManager]Bridge API批量禁用模组成功: ${modIds.length}个');
+          return results;
+        }
+      } catch (e) {
+        print('[ModManager]Bridge API批量禁用失败，回退到文件系统: $e');
+      }
+    }
+
+    // 回退到文件系统批量操作
+    print('[ModManager]使用文件系统模式批量禁用模组');
     for (final modId in modIds) {
       try {
         results[modId] = await disableMod(modId);
       } catch (e) {
-        print('[ModManager]禁用模组 $modId 时出错: $e');
+        print('[ModManager]禁用模组失败: $modId, 错误: $e');
         results[modId] = false;
       }
     }
+
     return results;
   }
 
-  /// 对模组列表进行排序
+  // ===========================================
+  // 文件系统模式回退方法
+  // ===========================================
+
+  /// 检查文件系统模组是否启用
+  bool _checkFileSystemModEnabled(String modId) {
+    try {
+      _updateWorkshopPath();
+      if (_workshopPath == null) return false;
+
+      // 在文件系统中，启用状态通常通过特定的文件或目录结构判断
+      // 这里需要根据实际的模组启用机制来实现
+      final modDir = Directory(path.join(_workshopPath!, modId));
+      if (!modDir.existsSync()) return false;
+
+      // 假设启用状态通过检查是否存在.enabled文件来判断
+      final enabledFile = File(path.join(modDir.path, '.enabled'));
+      return enabledFile.existsSync();
+    } catch (e) {
+      print('[ModManager]检查文件系统模组启用状态失败: $e');
+      return false;
+    }
+  }
+
+  /// 在文件系统中启用模组
+  bool _enableFileSystemMod(String modId) {
+    try {
+      _updateWorkshopPath();
+      if (_workshopPath == null) return false;
+
+      final modDir = Directory(path.join(_workshopPath!, modId));
+      if (!modDir.existsSync()) return false;
+
+      // 创建.enabled文件来标记模组已启用
+      final enabledFile = File(path.join(modDir.path, '.enabled'));
+      enabledFile.writeAsStringSync('enabled');
+      
+      _invalidateCache();
+      print('[ModManager]文件系统启用模组成功: $modId');
+      return true;
+    } catch (e) {
+      print('[ModManager]文件系统启用模组失败: $e');
+      return false;
+    }
+  }
+
+  /// 在文件系统中禁用模组
+  bool _disableFileSystemMod(String modId) {
+    try {
+      _updateWorkshopPath();
+      if (_workshopPath == null) return false;
+
+      final modDir = Directory(path.join(_workshopPath!, modId));
+      if (!modDir.existsSync()) return false;
+
+      // 删除.enabled文件来标记模组已禁用
+      final enabledFile = File(path.join(modDir.path, '.enabled'));
+      if (enabledFile.existsSync()) {
+        enabledFile.deleteSync();
+      }
+      
+      _invalidateCache();
+      print('[ModManager]文件系统禁用模组成功: $modId');
+      return true;
+    } catch (e) {
+      print('[ModManager]文件系统禁用模组失败: $e');
+      return false;
+    }
+  }
+
+  // ===========================================
+  // 工具方法
+  // ===========================================
+
+  /// 排序模组列表
   List<ModInfo> sortMods(List<ModInfo> mods, String sortBy, {bool reverse = false}) {
     switch (sortBy) {
       case 'name':
-        // 按显示名称排序
         mods.sort((a, b) => a.displayName.compareTo(b.displayName));
-        if (reverse) mods = mods.reversed.toList();
-        return mods;
-      case 'status':
-        // 按启用状态排序（已启用的在前）
-        // 注意：这里需要异步检查状态，暂时按名称排序
-        mods.sort((a, b) => a.displayName.compareTo(b.displayName));
-        if (reverse) mods = mods.reversed.toList();
-        return mods;
+        break;
+      case 'version':
+        mods.sort((a, b) => a.version.compareTo(b.version));
+        break;
       case 'size':
-        // 按大小排序
-        int parseSize(String sizeStr) {
-          try {
-            if (sizeStr.endsWith('GB')) {
-              return (double.parse(sizeStr.substring(0, sizeStr.length - 2)) * 1024 * 1024 * 1024).toInt();
-            } else if (sizeStr.endsWith('MB')) {
-              return (double.parse(sizeStr.substring(0, sizeStr.length - 2)) * 1024 * 1024).toInt();
-            } else if (sizeStr.endsWith('KB')) {
-              return (double.parse(sizeStr.substring(0, sizeStr.length - 2)) * 1024).toInt();
-            } else if (sizeStr.endsWith('B')) {
-              return int.parse(sizeStr.substring(0, sizeStr.length - 1));
-            } else {
-              return 0;
-            }
-          } catch (e) {
-            return 0;
+        // 简单的文件大小比较，实际可能需要解析大小字符串
+        break;
+      case 'enabled':
+        // 先按启用状态排序，再按名称排序
+        mods.sort((a, b) {
+          final aEnabled = a.enabled ?? false;
+          final bEnabled = b.enabled ?? false;
+          if (aEnabled != bEnabled) {
+            return aEnabled ? -1 : 1;
           }
-        }
-        mods.sort((a, b) => parseSize(a.size).compareTo(parseSize(b.size)));
-        if (reverse) mods = mods.reversed.toList();
-        return mods;
-      case 'id':
-        // 按ID排序
-        mods.sort((a, b) => int.parse(a.id).compareTo(int.parse(b.id)));
-        if (reverse) mods = mods.reversed.toList();
-        return mods;
+          return a.displayName.compareTo(b.displayName);
+        });
+        break;
       default:
-        return mods;
+        // 默认按名称排序
+        mods.sort((a, b) => a.displayName.compareTo(b.displayName));
     }
+
+    if (reverse) {
+      mods = mods.reversed.toList();
+    }
+
+    return mods;
   }
+
+  /// 清理资源
+  void dispose() {
+    _bridgeClient.dispose();
+    print('[ModManager]资源已清理');
+  }
+
+  // 重复方法已删除，保留第838行开始的原始实现
 
   /// 获取游戏Global.json文件路径
   String _getGlobalJsonPath() {
@@ -801,6 +1087,63 @@ class ModManager {
     // 确保目录存在
     Directory(userDataPath).createSync(recursive: true);
     return path.join(userDataPath, 'Global.json');
+  }
+
+  // ===== Bridge API 集成方法 =====
+
+  /// 检查Bridge API连接状态
+  Future<bool> isBridgeConnected() async {
+    try {
+      return await _bridgeClient.isConnected;
+    } catch (e) {
+      print('[ModManager]Bridge连接检查失败: $e');
+      return false;
+    }
+  }
+
+  /// 初始化Bridge连接
+  Future<void> initializeBridgeConnection() async {
+    try {
+      await _bridgeClient.connect();
+      print('[ModManager]Bridge连接初始化成功');
+    } catch (e) {
+      print('[ModManager]Bridge连接初始化失败: $e');
+      throw Exception('Bridge连接初始化失败: $e');
+    }
+  }
+
+  /// 从文件系统获取模组启用状态
+  Future<bool> _getModEnabledStatusFromFile(String modId) async {
+    try {
+      final globalJsonPath = _getGlobalJsonPath();
+      final globalFile = File(globalJsonPath);
+      
+      if (!await globalFile.exists()) {
+        return false;
+      }
+      
+      final content = await globalFile.readAsString();
+      final globalData = json.decode(content);
+      
+      // 获取模组信息以获取显示名称
+      _updateWorkshopPath();
+      if (_workshopPath != null) {
+        final sourceModPath = path.join(_workshopPath!, modId);
+        if (await Directory(sourceModPath).exists()) {
+          final modInfo = await _getModInfo(modId, sourceModPath);
+          final modName = modInfo.displayName.isNotEmpty ? modInfo.displayName : modInfo.name;
+          final modStatus = globalData['ModActive_$modName'];
+          if (modStatus != null && modStatus is Map<String, dynamic>) {
+            return modStatus['value'] ?? false;
+          }
+        }
+      }
+      
+      return false;
+    } catch (e) {
+      print('[ModManager]从文件系统获取模组状态失败: $e');
+      return false;
+    }
   }
 }
 

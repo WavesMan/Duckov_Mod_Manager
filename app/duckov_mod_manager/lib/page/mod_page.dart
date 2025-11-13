@@ -1,6 +1,7 @@
 // mod_page.dart
 /// 模组管理页面 - 基于Flet的mods_page.py重构
 
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/mod_manager.dart';
@@ -29,18 +30,143 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
   int _totalPages = 1;
   final int _pageSize = 16;
   late TabController _tabController;
+  final ScrollController _scrollController = ScrollController();
+  bool _showScrollTopButton = false;
+  
+  // Bridge API 相关状态
+  bool _isBridgeConnected = false;
+  bool _isCheckingBridgeConnection = false;
+  Timer? _bridgeStatusTimer;
+  final Map<String, Future<bool>> _modStatusFutures = {};
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        _onTabChanged(_tabController.index);
+      }
+    });
     _loadMods();
+    
+    // 启动Bridge连接状态监控
+    _startBridgeStatusMonitoring();
+    
+    // 添加滚动监听器
+    _scrollController.addListener(_scrollListener);
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _scrollController.dispose();
+    _bridgeStatusTimer?.cancel();
+    _modStatusFutures.clear();
     super.dispose();
+  }
+  
+  // 滚动监听器，控制回到顶部按钮的显示
+  void _scrollListener() {
+    setState(() {
+      _showScrollTopButton = _scrollController.offset > 300;
+    });
+  }
+  
+  // 回到顶部
+  void _scrollToTop() {
+    _scrollController.animateTo(
+      0.0,
+      duration: Duration(milliseconds: 500),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  // Bridge API 连接状态监控
+  void _startBridgeStatusMonitoring() {
+    _checkBridgeConnection();
+    _bridgeStatusTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _checkBridgeConnection();
+    });
+  }
+
+  Future<void> _checkBridgeConnection() async {
+    if (_isCheckingBridgeConnection) return;
+    
+    setState(() {
+      _isCheckingBridgeConnection = true;
+    });
+
+    try {
+      final isConnected = await _modManager.isBridgeConnected();
+      if (mounted) {
+        final wasDisconnected = !_isBridgeConnected && isConnected;
+        final wasConnected = _isBridgeConnected && !isConnected;
+        
+        setState(() {
+          _isBridgeConnected = isConnected;
+          _isCheckingBridgeConnection = false;
+        });
+        
+        // 连接状态变化提示
+        if (wasConnected) {
+          _showSuccessDialog('Bridge API 连接已恢复');
+          _loadMods(); // 重新加载模组以使用Bridge API
+        } else if (wasDisconnected) {
+          _showErrorDialog('Bridge API 连接已断开，将使用文件系统模式');
+        }
+      }
+    } catch (e) {
+      print('[ModPage] Bridge连接检查失败: $e');
+      if (mounted) {
+        final wasConnected = _isBridgeConnected;
+        setState(() {
+          _isBridgeConnected = false;
+          _isCheckingBridgeConnection = false;
+        });
+        
+        // 如果之前连接成功，现在失败了，显示错误提示
+        if (wasConnected) {
+          _showErrorDialog('Bridge API 连接错误: $e，已切换到文件系统模式');
+        }
+      }
+    }
+  }
+
+  // 手动重连Bridge API
+  Future<void> _reconnectBridge() async {
+    setState(() {
+      _isCheckingBridgeConnection = true;
+    });
+
+    try {
+      // 尝试重新初始化Bridge连接
+      await _modManager.initializeBridgeConnection();
+      await _checkBridgeConnection();
+    } catch (e) {
+      setState(() {
+        _isCheckingBridgeConnection = false;
+      });
+      _showErrorDialog('Bridge API 重连失败: $e');
+    }
+  }
+
+  // 获取模组启用状态（优先Bridge API）
+  Future<bool> _getModEnabledStatus(String modId) {
+    if (_modStatusFutures.containsKey(modId)) {
+      return _modStatusFutures[modId]!;
+    }
+
+    final future = _modManager.isModEnabled(modId);
+    _modStatusFutures[modId] = future;
+    
+    future.then((_) {
+      _modStatusFutures.remove(modId);
+    }).catchError((_) {
+      _modStatusFutures.remove(modId);
+    });
+
+    return future;
   }
 
   Future<void> _loadMods() async {
@@ -49,7 +175,8 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
     });
 
     try {
-      final result = await _modManager.getDownloadedModsPaginated(
+      // 优先使用Bridge API混合模式加载
+      final result = await _modManager.getSmartModsPaginated(
         page: _currentPage,
         pageSize: _pageSize,
       );
@@ -62,10 +189,26 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
       });
     } catch (e) {
       print('[ModPage] 加载模组时出错: $e');
-      setState(() {
-        _isLoading = false;
-      });
-      _showErrorDialog('加载模组失败: $e');
+      // 回退到传统方法
+      try {
+        final result = await _modManager.getDownloadedModsPaginated(
+          page: _currentPage,
+          pageSize: _pageSize,
+        );
+
+        setState(() {
+          _mods = result.mods;
+          _totalPages = result.totalPages;
+          _applyFilters();
+          _isLoading = false;
+        });
+      } catch (fallbackError) {
+        print('[ModPage] 回退加载也失败: $fallbackError');
+        setState(() {
+          _isLoading = false;
+        });
+        _showErrorDialog('加载模组失败: $e');
+      }
     }
   }
 
@@ -100,12 +243,20 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
     });
     
     // 根据切换的标签页加载相应的模组
-    if (index == 0 && _mods.isEmpty) {
-      _loadMods();
-    } else if (index == 1 && _localMods.isEmpty) {
-      _loadLocalMods();
-    } else {
-      _applyFilters();
+    if (index == 0) {
+      if (_mods.isEmpty) {
+        _loadMods();
+      } else {
+        // 确保总是重新应用过滤器以显示正确的数据
+        _applyFilters();
+      }
+    } else if (index == 1) {
+      if (_localMods.isEmpty) {
+        _loadLocalMods();
+      } else {
+        // 确保总是重新应用过滤器以显示正确的数据
+        _applyFilters();
+      }
     }
   }
 
@@ -131,6 +282,8 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
 
     setState(() {
       _filteredMods = filtered;
+      // 清除状态缓存
+      _modStatusFutures.clear();
     });
   }
 
@@ -169,6 +322,8 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
     );
   }
 
+
+
   void _toggleSelectAll(bool? value) {
     setState(() {
       _selectAll = value ?? false;
@@ -194,38 +349,95 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
   Future<void> _enableSelectedMods() async {
     if (_selectedModIds.isEmpty) return;
 
-    final results = await _modManager.batchEnableMods(_selectedModIds);
-    final successCount = results.values.where((result) => result).length;
-    
-    _showSuccessDialog('成功启用 $successCount/${_selectedModIds.length} 个模组');
     setState(() {
-      _selectedModIds.clear();
-      _selectAll = false;
+      _isLoading = true;
     });
+
+    try {
+      // 优先使用Bridge API批量操作
+      final results = _isBridgeConnected
+          ? await _modManager.batchToggleBridgeMods(_selectedModIds, true)
+          : await _modManager.batchEnableMods(_selectedModIds);
+      
+      final successCount = results.values.where((result) => result).length;
+      
+      _showSuccessDialog('成功启用 $successCount/${_selectedModIds.length} 个模组');
+      setState(() {
+        _selectedModIds.clear();
+        _selectAll = false;
+        _modStatusFutures.clear();
+      });
+      
+      // 刷新模组列表以显示最新状态
+      _loadMods();
+    } catch (e) {
+      _showErrorDialog('启用模组失败: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _disableSelectedMods() async {
     if (_selectedModIds.isEmpty) return;
 
-    final results = await _modManager.batchDisableMods(_selectedModIds);
-    final successCount = results.values.where((result) => result).length;
-    
-    _showSuccessDialog('成功禁用 $successCount/${_selectedModIds.length} 个模组');
     setState(() {
-      _selectedModIds.clear();
-      _selectAll = false;
+      _isLoading = true;
     });
+
+    try {
+      // 优先使用Bridge API批量操作
+      final results = _isBridgeConnected
+          ? await _modManager.batchToggleBridgeMods(_selectedModIds, false)
+          : await _modManager.batchDisableMods(_selectedModIds);
+      
+      final successCount = results.values.where((result) => result).length;
+      
+      _showSuccessDialog('成功禁用 $successCount/${_selectedModIds.length} 个模组');
+      setState(() {
+        _selectedModIds.clear();
+        _selectAll = false;
+        _modStatusFutures.clear();
+      });
+      
+      // 刷新模组列表以显示最新状态
+      _loadMods();
+    } catch (e) {
+      _showErrorDialog('禁用模组失败: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _toggleModStatus(String modId) async {
     try {
-      final isEnabled = await _modManager.isModEnabled(modId);
-      final success = isEnabled 
-          ? await _modManager.disableMod(modId)
-          : await _modManager.enableMod(modId);
+      setState(() {
+        // 清除该模组的状态缓存
+        _modStatusFutures.remove(modId);
+      });
+
+      final isEnabled = await _getModEnabledStatus(modId);
+      bool success;
+      
+      if (_isBridgeConnected) {
+        // 优先使用Bridge API
+        success = isEnabled 
+            ? await _modManager.disableBridgeMod(modId)
+            : await _modManager.enableBridgeMod(modId);
+      } else {
+        // 回退到传统方法
+        success = isEnabled 
+            ? await _modManager.disableMod(modId)
+            : await _modManager.enableMod(modId);
+      }
 
       if (success) {
         _showSuccessDialog(isEnabled ? '模组已禁用' : '模组已启用');
+        // 刷新模组列表以显示最新状态
+        _loadMods();
       } else {
         _showErrorDialog('操作失败');
       }
@@ -336,6 +548,96 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
         ),
       ],
     );
+  }
+
+  // Bridge API 状态指示器
+  Widget _buildBridgeStatusIndicator() {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _isBridgeConnected ? Icons.link : Icons.link_off,
+            color: _isBridgeConnected ? Colors.green : Colors.red,
+            size: 20,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'Bridge',
+            style: TextStyle(
+              color: _isBridgeConnected ? Colors.green : Colors.red,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          // 添加重连按钮（当Bridge断开连接时显示）
+          if (!_isBridgeConnected && !_isCheckingBridgeConnection) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              onPressed: _reconnectBridge,
+              icon: Icon(Icons.refresh, size: 30, color: Colors.orange[600]),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                minWidth: 20,
+                minHeight: 20,
+              ),
+              tooltip: '重连Bridge API',
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Bridge API 状态横幅
+  Widget _buildBridgeStatusBanner() {
+    if (_isBridgeConnected || _isCheckingBridgeConnection) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: _isBridgeConnected 
+              ? Colors.green.withOpacity(0.1)
+              : Colors.orange.withOpacity(0.1),
+          border: Border(
+            bottom: BorderSide(
+              color: _isBridgeConnected ? Colors.green : Colors.orange,
+              width: 1,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              _isBridgeConnected ? Icons.check_circle : Icons.warning,
+              color: _isBridgeConnected ? Colors.green : Colors.orange,
+              size: 16,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _isBridgeConnected
+                    ? 'Bridge API 已连接 - 实时模组管理可用'
+                    : _isCheckingBridgeConnection
+                        ? '正在检查Bridge API连接...'
+                        : 'Bridge API 未连接 - 使用文件系统模式',
+                style: TextStyle(
+                  color: _isBridgeConnected ? Colors.green : Colors.orange,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            if (!_isBridgeConnected && !_isCheckingBridgeConnection)
+              TextButton(
+                onPressed: _checkBridgeConnection,
+                child: const Text('重试', style: TextStyle(fontSize: 12)),
+              ),
+          ],
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   Widget _buildBatchControls() {
@@ -490,45 +792,13 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
     );
   }
 
-  Widget _buildActionButtons(ModInfo mod, bool isEnabled) {
-    return Row(
-      children: [
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: () => _toggleModStatus(mod.id),
-            icon: Icon(isEnabled ? Icons.toggle_on : Icons.toggle_off),
-            label: Text(isEnabled ? '禁用' : '启用'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isEnabled ? Colors.red : Colors.green,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              textStyle: const TextStyle(fontSize: 12),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: () => _showModDetails(mod),
-            icon: const Icon(Icons.info, size: 16),
-            label: const Text('详情'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              textStyle: const TextStyle(fontSize: 12),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+
 
   Widget _buildModCard(ModInfo mod) {
     final isSelected = _selectedModIds.contains(mod.id);
 
     return FutureBuilder<bool>(
-      future: _modManager.isModEnabled(mod.id),
+      future: _getModEnabledStatus(mod.id),
       builder: (context, snapshot) {
         final isEnabled = snapshot.data ?? false;
         
@@ -667,6 +937,7 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
               setState(() {
                 _currentPage--;
                 _loadMods();
+                _scrollToTop(); // 切换页面时回到顶部
               });
             } : null,
           ),
@@ -677,6 +948,7 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
               setState(() {
                 _currentPage++;
                 _loadMods();
+                _scrollToTop(); // 切换页面时回到顶部
               });
             } : null,
           ),
@@ -690,48 +962,63 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
     return Scaffold(
       appBar: AppBar(
         title: const Text('模组管理'),
-        backgroundColor: Colors.blue,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(
-            Radius.circular(15), // 四个角都有圆角
-          ),
-        ),
-        actions: [
-          if (_selectedModIds.isNotEmpty && _tabController.index == 0) ...[
-            IconButton(
-              onPressed: _enableSelectedMods,
-              icon: const Icon(Icons.check_circle),
-              tooltip: '启用所选模组',
-            ),
-            IconButton(
-              onPressed: _disableSelectedMods,
-              icon: const Icon(Icons.cancel),
-              tooltip: '禁用所选模组',
-            ),
-          ],
-        ],
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: Colors.white,
-          splashBorderRadius: BorderRadius.circular(15),
           onTap: _onTabChanged,
-          tabs: [
-            Tab(text: '创意工坊模组 (${_mods.length})'),
-            Tab(text: '本地模组 (${_localMods.length})'),
+          tabs: const [
+            Tab(text: '创意工坊', icon: Icon(Icons.store)),
+            Tab(text: '本地模组', icon: Icon(Icons.folder)),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // 创意工坊模组页面
-          _buildWorkshopModsPage(),
-          // 本地模组页面
-          _buildLocalModsPage(),
+        actions: [
+          // Bridge API 连接状态
+          _buildBridgeStatusIndicator(),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              if (_tabController.index == 0) {
+                _loadMods();
+              } else {
+                _loadLocalMods();
+              }
+            },
+          ),
         ],
       ),
+      body: Column(
+        children: [
+          // 搜索和排序控件 - 减小内边距和间距
+          Container(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                Expanded(flex: 2, child: _buildSearchBar()),
+                const SizedBox(width: 8),
+                Expanded(child: _buildSortControls()),
+              ],
+            ),
+          ),
+          // 模组列表
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // 创意工坊模组页面
+                _buildWorkshopModsPage(),
+                // 本地模组页面
+                _buildLocalModsPage(),
+              ],
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: _showScrollTopButton
+          ? FloatingActionButton(
+              onPressed: _scrollToTop,
+              child: Icon(Icons.arrow_upward),
+              tooltip: '回到顶部',
+            )
+          : null,
     );
   }
 
@@ -741,30 +1028,25 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 控制栏 - 紧凑布局
+          // 紧凑控制栏
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             child: Row(
               children: [
                 // 全选控制
                 Checkbox(
                   value: _selectAll,
                   onChanged: _toggleSelectAll,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 const Text('全选', style: TextStyle(fontSize: 12)),
                 const Spacer(),
-                // 搜索栏
-                Expanded(flex: 3, child: _buildSearchBar()),
-                const SizedBox(width: 8),
-                // 排序控制
-                _buildSortControls(),
               ],
             ),
           ),
           
-          // 批量操作控制
+          // 紧凑批量操作控制
           _buildBatchControls(),
-          const SizedBox(height: 4),
           
           // 模组列表
           Expanded(
@@ -788,27 +1070,36 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
                           ],
                         ),
                       )
-                    : GridView.builder(
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 3,
-                        ),
-                        itemCount: _filteredMods.length,
-                        itemBuilder: (context, index) {
-                          // 添加边界检查以防止数组越界错误
-                          if (index >= _filteredMods.length || _filteredMods.isEmpty) {
-                            return const SizedBox.shrink();
-                          }
-                          final mod = _filteredMods[index];
-                          return _buildModCard(mod);
-                        },
+                    : CustomScrollView(
+                        controller: _scrollController,
+                        slivers: [
+                          SliverGrid(
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 3,
+                            ),
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                // 添加边界检查以防止数组越界错误
+                                if (index >= _filteredMods.length || _filteredMods.isEmpty) {
+                                  return const SizedBox.shrink();
+                                }
+                                final mod = _filteredMods[index];
+                                return _buildModCard(mod);
+                              },
+                              childCount: _filteredMods.length,
+                            )
+                          ),
+                          // 添加分页控件作为单独的sliver
+                          SliverToBoxAdapter(
+                            child: _buildPaginationControls(),
+                          ),
+                        ],
                       ),
           ),
-          // 分页控制
-          _buildPaginationControls(),
-          ],
+        ],
       ),
     );
   }
@@ -828,13 +1119,11 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
                 const Icon(Icons.folder, color: Colors.blue, size: 16),
                 const SizedBox(width: 4),
                 Text(
-                  '本地模组 (${_filteredMods.length})',
+                  '本地模组 (${_localMods.length})',
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
-                // 搜索栏
-                Expanded(flex: 3, child: _buildSearchBar()),
-                const SizedBox(width: 8),
+                // 搜索栏已移至顶部主界面
                 // 排序控制
                 _buildSortControls(),
               ],
@@ -877,22 +1166,29 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
                           ],
                         ),
                       )
-                    : GridView.builder(
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 3,
-                        ),
-                        itemCount: _filteredMods.length,
-                        itemBuilder: (context, index) {
-                          // 添加边界检查以防止数组越界错误
-                          if (index >= _filteredMods.length || _filteredMods.isEmpty) {
-                            return const SizedBox.shrink();
-                          }
-                          final mod = _filteredMods[index];
-                          return _buildModCard(mod);
-                        },
+                    : CustomScrollView(
+                        controller: _scrollController,
+                        slivers: [
+                          SliverGrid(
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 3,
+                            ),
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                // 添加边界检查以防止数组越界错误
+                                if (index >= _filteredMods.length || _filteredMods.isEmpty) {
+                                  return const SizedBox.shrink();
+                                }
+                                final mod = _filteredMods[index];
+                                return _buildModCard(mod);
+                              },
+                              childCount: _filteredMods.length,
+                            )
+                          )
+                        ],
                       ),
           ),
         ],
