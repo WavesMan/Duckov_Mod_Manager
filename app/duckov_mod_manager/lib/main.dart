@@ -6,6 +6,9 @@ import 'page/mod_collections_page.dart';
 import 'page/steam_workshop_page.dart';
 import 'page/setting_page.dart';
 import 'services/preload_manager.dart';
+import 'services/config_manager.dart';
+import 'services/version_manager.dart';
+import 'page/update_page.dart';
 
 void main() {
   runApp(const DuckovModManagerApp());
@@ -23,9 +26,7 @@ class DuckovModManagerApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'MiSans',
       ),
-      home: PreloadWidget(
-        child: const MainAppLayout(),
-      ),
+      home: const MainAppLayout(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -43,6 +44,37 @@ class _MainAppLayoutState extends State<MainAppLayout> {
   
   // 用于避免动画堆积
   bool _isAnimating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkForUpdatesOnStartup();
+  }
+
+  /// 启动时检查更新
+  Future<void> _checkForUpdatesOnStartup() async {
+    // 检查是否启用了自动更新检查
+    final autoUpdate = configManager.get('auto_update') as bool? ?? true;
+    if (!autoUpdate) return;
+
+    try {
+      // 延迟几秒再检查更新，确保应用完全启动
+      await Future.delayed(const Duration(seconds: 3));
+      
+      final result = await versionManager.checkForUpdates();
+      final hasUpdate = result['has_update'] as bool;
+      
+      // 如果有更新，则显示更新弹窗
+      if (hasUpdate && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          showUpdateDialog(context, result);
+        });
+      }
+    } catch (e) {
+      // 静默处理启动时检查更新的错误
+      debugPrint('启动时检查更新失败: $e');
+    }
+  }
 
   void _onPageChanged(int index) {
     if (index == _currentPageIndex) return;

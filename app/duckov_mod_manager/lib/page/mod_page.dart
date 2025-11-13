@@ -435,18 +435,21 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
       ),
     );
   }
-
   Widget _buildModDescription(String description) {
-    return Scrollbar(
-      child: SingleChildScrollView(
-        child: Text(
-          description.isEmpty ? '暂无描述' : description,
-          style: ThemeManager.bodyTextStyle().copyWith(
-            fontSize: 11,
-            color: Colors.grey[700],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          child: Scrollbar(
+            child: Text(
+              description.isEmpty ? '暂无描述' : description,
+              style: ThemeManager.bodyTextStyle().copyWith(
+                fontSize: 11,
+                color: Colors.grey[700],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -588,7 +591,10 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
                         
                         // 描述文本（滚动）
                         Expanded(
-                          child: _buildModDescription(mod.description),
+                          child: SizedBox(
+                            height: 80, // 设置固定高度
+                            child: _buildModDescription(mod.description),
+                          ),
                         ),
                       ],
                     ),
@@ -839,7 +845,7 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Text(
-              '路径: ${_localMods.isNotEmpty ? _localMods.first.path.split('\\').take(3).join('\\') + '\\...' : '未找到路径'}',
+              '路径: ${_localMods.isNotEmpty ? _localMods.first.path : '未找到路径'}',
               style: ThemeManager.bodyTextStyle().copyWith(
                 fontSize: 9,
                 color: Colors.grey[600],

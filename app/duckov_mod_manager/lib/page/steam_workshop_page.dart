@@ -22,6 +22,9 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
   final PreloadManager _preloadManager = PreloadManager();
   final String _appId = "3167020"; // Duckov Game的App ID
   
+  // 滚动控制器
+  final ScrollController _scrollController = ScrollController();
+  
   // 预加载数据存储（用于存储额外的预加载数据）
   final Map<String, Map<int, Map<String, dynamic>>> _additionalPreloadedData = {
     'most_popular': {},
@@ -43,28 +46,72 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedSort = 'most_popular';
   bool _isLoading = false;
+  bool _isReloading = false; // 用于控制刷新动画
   String? _errorMessage;
   
   @override
   void initState() {
     super.initState();
     _loadInitialData();
+    
+    // 监听滚动事件，用于控制回到顶部按钮的显示
+    _scrollController.addListener(_scrollListener);
   }
   
-  Future<void> _loadInitialData() async {
+  @override
+  void dispose() {
+    _scrollController.removeListener(_scrollListener);
+    _scrollController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+  
+  // 滚动监听器
+  void _scrollListener() {
+    // 滚动监听逻辑可以根据需要添加
+  }
+  
+  // 回到顶部
+  void _scrollToTop() {
+    _scrollController.animateTo(
+      0.0,
+      duration: Duration(milliseconds: 500),
+      curve: Curves.easeInOut,
+    );
+  }
+  
+  Future<void> _loadInitialData({bool isRefresh = false}) async {
     setState(() {
-      _isLoading = true;
+      if (isRefresh) {
+        _isReloading = true;
+      } else {
+        _isLoading = true;
+      }
       _errorMessage = null;
     });
     
     try {
+      // 如果是刷新操作，清除缓存数据
+      if (isRefresh) {
+        _additionalPreloadedData.clear();
+        _additionalPreloadedData.addAll({
+          'most_popular': {},
+          'top_rated': {},
+          'newest': {},
+          'last_updated': {}
+        });
+        
+        // 清除预加载管理器中的数据
+        _preloadManager.clearPreloadedData();
+      }
+      
       // 首先检查预加载管理器是否有数据
       final preloadedResult = _preloadManager.getPreloadedData(
         _currentData['sort_by'], 
         _currentData['current_page']
       );
       
-      if (preloadedResult != null) {
+      if (preloadedResult != null && !isRefresh) {
         // 使用预加载数据
         setState(() {
           _currentData = {
@@ -112,7 +159,11 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
       });
     } finally {
       setState(() {
-        _isLoading = false;
+        if (isRefresh) {
+          _isReloading = false;
+        } else {
+          _isLoading = false;
+        }
       });
     }
   }
@@ -237,12 +288,13 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SingleChildScrollView(
+        controller: _scrollController,
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              headingText('创意工坊', level: 1),
+              _buildHeader(),
               SizedBox(height: 20),
               bodyText('浏览和下载Steam创意工坊的模组。'),
               SizedBox(height: 30),
@@ -252,18 +304,35 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
               SizedBox(height: 20),
               
               // 加载状态和错误信息
-              if (_isLoading) _buildLoadingIndicator(),
+              if (_isLoading || _isReloading) _buildLoadingIndicator(),
               if (_errorMessage != null) _buildErrorMessage(),
               
               // 模组列表
-              if (!_isLoading && _errorMessage == null) _buildModsGrid(),
+              if (!_isLoading && !_isReloading && _errorMessage == null)
+                AnimatedSwitcher(
+                  duration: Duration(milliseconds: 500),
+                  switchInCurve: Curves.easeIn,
+                  switchOutCurve: Curves.easeOut,
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: child,
+                    );
+                  },
+                  child: _buildModsGrid(),
+                ),
               
               // 分页控件
-              if (!_isLoading && _errorMessage == null && _currentData['total_pages'] > 1) 
+              if (!_isLoading && !_isReloading && _errorMessage == null && _currentData['total_pages'] > 1) 
                 _buildPaginationControls(),
             ],
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _scrollToTop,
+        child: Icon(Icons.arrow_upward),
+        tooltip: '回到顶部',
       ),
     );
   }
@@ -707,6 +776,23 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
       case 'last_updated': return '最近更新模组';
       default: return '模组列表';
     }
+  }
+
+  /// 构建页面头部，包含标题和刷新按钮
+  Widget _buildHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        headingText('创意工坊', level: 1),
+        IconButton(
+          icon: Icon(Icons.refresh),
+          onPressed: () async {
+            await _loadInitialData(isRefresh: true);
+          },
+          tooltip: '刷新',
+        ),
+      ],
+    );
   }
 }
 

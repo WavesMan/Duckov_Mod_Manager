@@ -2,10 +2,12 @@
 /// 设置页面 - 基于Flet设置功能重构
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart'; // 添加url_launcher导入
 import '../services/theme_manager.dart';
 import '../services/config_manager.dart';
 import '../services/version_manager.dart';
 import '../services/mod_manager.dart';
+import 'update_page.dart'; // 添加更新弹窗的导入
 
 class SettingPage extends StatefulWidget {
   const SettingPage({Key? key}) : super(key: key);
@@ -497,11 +499,11 @@ class SettingPageState extends State<SettingPage> {
             ],
           ),
         )
-      else if (hasUpdate)
+      else
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.green[50],
+            color: hasUpdate ? Colors.green[50] : Colors.blue[50],
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
@@ -509,37 +511,42 @@ class SettingPageState extends State<SettingPage> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.update, color: Colors.green, size: 20),
+                  Icon(hasUpdate ? Icons.update : Icons.check_circle, 
+                       color: hasUpdate ? Colors.green : Colors.blue, 
+                       size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    '发现新版本: $latestVersion',
-                    style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                    hasUpdate ? '发现新版本: $latestVersion' : '当前已是最新版本',
+                    style: TextStyle(
+                      color: hasUpdate ? Colors.green : Colors.blue[800],
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: () => _openDownloadPage(result['download_url'] ?? ''),
-                child: const Text('前往下载'),
-              ),
-            ],
-          ),
-        )
-      else
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.blue[50],
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.blue, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                '当前已是最新版本',
-                style: TextStyle(color: Colors.blue[800]),
-              ),
+              if (hasUpdate) ...[
+                Text(
+                  result['release_notes'] as String? ?? '暂无更新说明',
+                  style: const TextStyle(fontSize: 12),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => _showUpdateDialog(result),
+                      child: const Text('查看详情'),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton(
+                      onPressed: () => _openDownloadPage(result['download_url'] ?? ''),
+                      child: const Text('前往下载'),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -581,6 +588,14 @@ class SettingPageState extends State<SettingPage> {
       setState(() {
         _updateResult = result;
       });
+      
+      // 如果有更新，直接显示更新弹窗
+      final hasUpdate = result['has_update'] as bool? ?? false;
+      if (hasUpdate && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showUpdateDialog(result);
+        });
+      }
     } catch (e) {
       setState(() {
         _updateResult = {'error': e.toString()};
@@ -666,7 +681,27 @@ class SettingPageState extends State<SettingPage> {
     }
   }
 
-
+  /// 显示更新弹窗
+  Future<void> _showUpdateDialog(Map<String, dynamic> updateInfo) async {
+    final result = await showUpdateDialog(context, updateInfo);
+    
+    if (result == 'workshop') {
+      // 打开创意工坊页面
+      final workshopUrl = 'https://steamcommunity.com/sharedfiles/filedetails/?id=3603261359';
+      try {
+        final uri = Uri.parse(workshopUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('无法打开创意工坊页面')),
+          );
+        }
+      }
+    }
+  }
 
   Widget _buildSettingItem({
     required String title,
