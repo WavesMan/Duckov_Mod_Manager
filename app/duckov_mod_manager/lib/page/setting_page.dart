@@ -283,7 +283,7 @@ class SettingPageState extends State<SettingPage> {
                   Text(
                     '请选择包含"Escape from Duckov"游戏的目录。通常位于：\n'
                     '• Steam版本: E:\\SteamLibrary\\steamapps\\common\\Escape from Duckov\n'
-                    '• 本地版本: 游戏安装目录或Mods文件夹',
+                    '• 本地版本: 游戏安装目录文件夹',
                     style: ThemeManager.bodyTextStyle(size: 10),
                   ),
                 ],

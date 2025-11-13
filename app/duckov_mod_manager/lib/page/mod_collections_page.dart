@@ -27,7 +27,7 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          headingText('Mod合集', level: 1),
+          headingText('Mod合集 BETA', level: 1),
           SizedBox(height: 20),
           bodyText('创建和管理您自己的模组合集，快速启用或禁用相关模组。'),
           SizedBox(height: 30),

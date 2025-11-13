@@ -27,7 +27,7 @@ class NavigationItem {
 final List<NavigationItem> navigationItems = [
   NavigationItem(title: '主页', icon: Icons.home, route: AppRoutes.home),
   NavigationItem(title: '模组管理', icon: Icons.apps, route: AppRoutes.mods),
-  NavigationItem(title: 'Mod合集', icon: Icons.collections, route: AppRoutes.modCollections),
+  NavigationItem(title: 'Mod合集 BETA', icon: Icons.collections, route: AppRoutes.modCollections),
   NavigationItem(title: '创意工坊', icon: Icons.workspaces, route: AppRoutes.steamWorkshop),
   NavigationItem(title: '设置', icon: Icons.settings, route: AppRoutes.settings),
 ];
