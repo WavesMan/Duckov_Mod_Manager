@@ -12,6 +12,7 @@ import 'services/collections/collection_service.dart';
 import 'services/mod_manager.dart';
 import 'services/mod_manager_bridge_client.dart';
 import 'services/bridge_sync_service.dart';
+import 'services/theme_manager.dart';
 import 'page/update_page.dart';
 
 void main() {

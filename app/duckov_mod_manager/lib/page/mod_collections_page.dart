@@ -23,96 +23,100 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          headingText('Mod合集 BETA', level: 1),
-          SizedBox(height: 20),
-          bodyText('创建和管理您自己的模组合集，快速启用或禁用相关模组。'),
-          SizedBox(height: 30),
+    return Container(
+      // 跟随主题的 surface 颜色（亮主题是白色，暗主题是深灰）
+        color: ThemeManager.getThemeColor('surface'),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              headingText('Mod合集 BETA', level: 1),
+              SizedBox(height: 20),
+              bodyText('创建和管理您自己的模组合集，快速启用或禁用相关模组。'),
+              SizedBox(height: 30),
           
-          // 操作栏
-          _buildActionBar(),
-          SizedBox(height: 16),
-          
-          // 搜索栏
-          _buildSearchBar(),
-          SizedBox(height: 20),
-          
-          // 合集列表
-          StreamBuilder<List<model.ModCollection>>(
-            stream: collectionService.collections$,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      '加载合集失败: ${snapshot.error}',
-                      style: TextStyle(color: Colors.red),
+            // 操作栏
+            _buildActionBar(),
+            SizedBox(height: 16),
+
+            // 搜索栏
+            _buildSearchBar(),
+            SizedBox(height: 20),
+
+            // 合集列表
+            StreamBuilder<List<model.ModCollection>>(
+              stream: collectionService.collections$,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        '加载合集失败: ${snapshot.error}',
+                        style: TextStyle(color: Colors.red),
+                      ),
                     ),
-                  ),
-                );
-              }
-              
-              final collections = snapshot.data ?? [];
-              final filteredCollections = collections.where((c) {
-                return c.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                       c.description.toLowerCase().contains(_searchQuery.toLowerCase());
-              }).toList();
-              
-              if (filteredCollections.isEmpty) {
-                return Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Column(
-                      children: [
-                        Icon(Icons.collections_outlined, size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text(
-                          _searchQuery.isEmpty ? '还没有创建任何合集' : '没有找到匹配的合集',
-                          style: ThemeManager.bodyTextStyle(size: 16),
-                          textAlign: TextAlign.center,
-                        ),
-                        if (_searchQuery.isEmpty)
-                          SizedBox(height: 16),
-                        if (_searchQuery.isEmpty)
-                          ElevatedButton(
-                            onPressed: _createNewCollection,
-                            child: Text('创建第一个合集'),
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-              
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  final screenWidth = constraints.maxWidth;
-                  final crossAxisCount = screenWidth > 800 ? 2 : 1;
-                  final childAspectRatio = crossAxisCount == 2 ? 1.6 : 1.5;
-                  
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: crossAxisCount,
-                      childAspectRatio: childAspectRatio,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 12,
-                    ),
-                    itemCount: filteredCollections.length,
-                    itemBuilder: (context, index) {
-                      return _buildCollectionCard(filteredCollections[index]);
-                    },
                   );
-                },
-              );
-            },
-          ),
-        ],
+                }
+
+                final collections = snapshot.data ?? [];
+                final filteredCollections = collections.where((c) {
+                  return c.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                         c.description.toLowerCase().contains(_searchQuery.toLowerCase());
+                }).toList();
+
+                if (filteredCollections.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Column(
+                        children: [
+                          Icon(Icons.collections_outlined, size: 64, color: Colors.grey),
+                          SizedBox(height: 16),
+                          Text(
+                            _searchQuery.isEmpty ? '还没有创建任何合集' : '没有找到匹配的合集',
+                            style: ThemeManager.bodyTextStyle(size: 16),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (_searchQuery.isEmpty)
+                            SizedBox(height: 16),
+                          if (_searchQuery.isEmpty)
+                            ElevatedButton(
+                              onPressed: _createNewCollection,
+                              child: Text('创建第一个合集'),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final screenWidth = constraints.maxWidth;
+                    final crossAxisCount = screenWidth > 800 ? 2 : 1;
+                    final childAspectRatio = crossAxisCount == 2 ? 1.6 : 1.5;
+
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        childAspectRatio: childAspectRatio,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 12,
+                      ),
+                      itemCount: filteredCollections.length,
+                      itemBuilder: (context, index) {
+                        return _buildCollectionCard(filteredCollections[index]);
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -120,12 +124,24 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
   Widget _buildActionBar() {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16),
-      child: ElevatedButton.icon(
-        onPressed: _createNewCollection,
-        icon: Icon(Icons.add),
-        label: Text('创建新合集'),
-        style: ElevatedButton.styleFrom(
-          padding: EdgeInsets.symmetric(vertical: 12),
+      child: SizedBox(
+        width: 150,
+        child: ElevatedButton.icon(
+          onPressed: _createNewCollection,
+          icon: Icon(Icons.add),
+          label: Text(
+              '创建新合集',
+              style: TextStyle(
+                color: Colors.white,
+              )
+          ),
+          style: ElevatedButton.styleFrom(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            backgroundColor: Colors.blue,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
         ),
       ),
     );
@@ -137,6 +153,8 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
       child: TextField(
         decoration: InputDecoration(
           hintText: '搜索合集...',
+          // 添加文本颜色
+          hintStyle: const TextStyle(color: Colors.grey),
           prefixIcon: Icon(Icons.search),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
@@ -153,6 +171,8 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
   Widget _buildCollectionCard(model.ModCollection collection) {
     return Card(
       elevation: 3,
+      // 卡片跟随滚动
+      color: ThemeManager.getThemeColor('background'),
       margin: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -283,10 +303,21 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _viewCollectionDetails(collection),
-                    icon: Icon(Icons.info_outline, size: 12),
-                    label: Text('详情', style: TextStyle(fontSize: 15)),
+                    icon: Icon(
+                        Icons.info_outline,
+                        size: 12,
+                        color: ThemeManager.getThemeColor('text_secondary')
+                    ),
+                    label: Text(
+                        '详情',
+                        style: TextStyle(
+                            fontSize: 15,
+                            color: ThemeManager.getThemeColor('text_secondary')
+                        )
+                    ),
                     style: OutlinedButton.styleFrom(
                       padding: EdgeInsets.symmetric(vertical: 4),
+                      backgroundColor: ThemeManager.getThemeColor('surface'),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -297,8 +328,13 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () async => await _enableCollection(collection),
-                    icon: Icon(Icons.play_arrow, size: 12),
-                    label: Text('启用', style: TextStyle(fontSize: 15)),
+                    icon: Icon(Icons.play_arrow, size: 13, color: Colors.white),
+                    label: Text('启用',
+                        style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.white
+                        )
+                    ),
                     style: ElevatedButton.styleFrom(
                       padding: EdgeInsets.symmetric(vertical: 4),
                       backgroundColor: Colors.green,
@@ -312,7 +348,7 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () async => await _disableCollection(collection),
-                    icon: Icon(Icons.stop, size: 12),
+                    icon: Icon(Icons.stop, size: 13),
                     label: Text('禁用', style: TextStyle(fontSize: 15)),
                     style: OutlinedButton.styleFrom(
                       padding: EdgeInsets.symmetric(vertical: 4),
@@ -335,10 +371,17 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
                 Expanded(
                   child: TextButton.icon(
                     onPressed: () async => await _editCollection(collection),
-                    icon: Icon(Icons.edit, size: 11),
-                    label: Text('编辑', style: TextStyle(fontSize: 15)),
+                    icon: Icon(Icons.edit, size: 13, color: Colors.white,),
+                    label: Text(
+                        '编辑',
+                        style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.white
+                        )
+                    ),
                     style: TextButton.styleFrom(
                       padding: EdgeInsets.symmetric(vertical: 2),
+                      backgroundColor: ThemeManager.getThemeColor('edit_color'),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(3),
                       ),
@@ -349,7 +392,7 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
                 Expanded(
                   child: TextButton.icon(
                     onPressed: () async => await _deleteCollection(collection),
-                    icon: Icon(Icons.delete_outline, size: 11),
+                    icon: Icon(Icons.delete_outline, size: 13, color: Colors.red),
                     label: Text('删除', style: TextStyle(fontSize: 15, color: Colors.red)),
                     style: TextButton.styleFrom(
                       padding: EdgeInsets.symmetric(vertical: 2),

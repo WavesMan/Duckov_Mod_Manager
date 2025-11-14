@@ -273,7 +273,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('无法打开链接: $url'),
-          backgroundColor: Colors.red,
+          backgroundColor: ThemeManager.getThemeColor('error'),
         )
       );
     }
@@ -286,54 +286,69 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
   
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SingleChildScrollView(
-        controller: _scrollController,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              SizedBox(height: 20),
-              bodyText('浏览和下载Steam创意工坊的模组。'),
-              SizedBox(height: 30),
-              
-              // 搜索和排序控件
-              _buildSearchControls(),
-              SizedBox(height: 20),
-              
-              // 加载状态和错误信息
-              if (_isLoading || _isReloading) _buildLoadingIndicator(),
-              if (_errorMessage != null) _buildErrorMessage(),
-              
-              // 模组列表
-              if (!_isLoading && !_isReloading && _errorMessage == null)
-                AnimatedSwitcher(
-                  duration: Duration(milliseconds: 500),
-                  switchInCurve: Curves.easeIn,
-                  switchOutCurve: Curves.easeOut,
-                  transitionBuilder: (child, animation) {
-                    return FadeTransition(
-                      opacity: animation,
-                      child: child,
-                    );
-                  },
-                  child: _buildModsGrid(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Container(
+          // 这层就是铺满 layout 区的背景
+          color: ThemeManager.getThemeColor('surface'),
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: constraints.maxWidth,
+                minHeight: constraints.maxHeight,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 800, // 保持中间内容区域最大宽度
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildHeader(),
+                        SizedBox(height: 20),
+                        bodyText('浏览和下载Steam创意工坊的模组。'),
+                        SizedBox(height: 30),
+                        
+                        // 搜索和排序控件
+                        _buildSearchControls(),
+                        SizedBox(height: 20),
+                        
+                        // 加载状态和错误信息
+                        if (_isLoading || _isReloading) _buildLoadingIndicator(),
+                        if (_errorMessage != null) _buildErrorMessage(),
+                        
+                        // 模组列表
+                        if (!_isLoading && !_isReloading && _errorMessage == null)
+                          AnimatedSwitcher(
+                            duration: Duration(milliseconds: 500),
+                            switchInCurve: Curves.easeIn,
+                            switchOutCurve: Curves.easeOut,
+                            transitionBuilder: (child, animation) {
+                              return FadeTransition(
+                                opacity: animation,
+                                child: child,
+                              );
+                            },
+                            child: _buildModsGrid(),
+                          ),
+                        
+                        // 分页控件
+                        if (!_isLoading && !_isReloading && _errorMessage == null && _currentData['total_pages'] > 1) 
+                          _buildPaginationControls(),
+                      ],
+                    ),
+                  ),
                 ),
-              
-              // 分页控件
-              if (!_isLoading && !_isReloading && _errorMessage == null && _currentData['total_pages'] > 1) 
-                _buildPaginationControls(),
-            ],
+              ),
+            ),
           ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _scrollToTop,
-        child: Icon(Icons.arrow_upward),
-        tooltip: '回到顶部',
-      ),
+        );
+      },
     );
   }
   
@@ -346,11 +361,22 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
             controller: _searchController,
             decoration: InputDecoration(
               labelText: '搜索模组...',
-              prefixIcon: Icon(Icons.search),
+              labelStyle: TextStyle(color: ThemeManager.getThemeColor('text_secondary')),
+              prefixIcon: Icon(Icons.search, color: ThemeManager.getThemeColor('text_secondary')),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: ThemeManager.getThemeColor('text_secondary')),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: ThemeManager.getThemeColor('text_secondary')),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: ThemeManager.getThemeColor('primary')),
               ),
             ),
+            style: TextStyle(color: ThemeManager.getThemeColor('text_primary')),
             onSubmitted: (_) => _onSearch(),
           ),
         ),
@@ -360,12 +386,13 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
         DropdownButton<String>(
           value: _selectedSort,
           items: [
-            DropdownMenuItem(value: 'most_popular', child: Text('最热门')),
-            DropdownMenuItem(value: 'top_rated', child: Text('最高评分')),
-            DropdownMenuItem(value: 'newest', child: Text('最新')),
-            DropdownMenuItem(value: 'last_updated', child: Text('最近更新')),
+            DropdownMenuItem(value: 'most_popular', child: Text('最热门', style: TextStyle(color: ThemeManager.getThemeColor('text_primary')))),
+            DropdownMenuItem(value: 'top_rated', child: Text('最高评分', style: TextStyle(color: ThemeManager.getThemeColor('text_primary')))),
+            DropdownMenuItem(value: 'newest', child: Text('最新', style: TextStyle(color: ThemeManager.getThemeColor('text_primary')))),
+            DropdownMenuItem(value: 'last_updated', child: Text('最近更新', style: TextStyle(color: ThemeManager.getThemeColor('text_primary')))),
           ],
           onChanged: _onSortChange,
+          dropdownColor: ThemeManager.getThemeColor('surface'),
         ),
         SizedBox(width: 10),
         
@@ -384,10 +411,16 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 10),
-            Text('正在加载创意工坊数据...'),
+            Text(
+                '正在加载创意工坊数据...',
+                style: TextStyle(
+                  color: ThemeManager.getThemeColor('text_primary'),
+                ),
+            ),
           ],
         ),
       ),
@@ -396,19 +429,20 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
   
   Widget _buildErrorMessage() {
     return Container(
+      color: ThemeManager.getThemeColor('surface'),
       width: double.infinity,
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.red[100],
+        color: ThemeManager.getThemeColor('error').withOpacity(0.3),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         children: [
-          Icon(Icons.error, color: Colors.red, size: 40),
+          Icon(Icons.error, color: ThemeManager.getThemeColor('error'), size: 40),
           SizedBox(height: 10),
           Text(
             _errorMessage!,
-            style: TextStyle(color: Colors.red[800]),
+            style: TextStyle(color: ThemeManager.getThemeColor('error')),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 10),
@@ -430,7 +464,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
           padding: const EdgeInsets.all(40.0),
           child: Column(
             children: [
-              Icon(Icons.search_off, size: 60, color: Colors.grey),
+              Icon(Icons.search_off, size: 60, color: ThemeManager.getThemeColor('text_secondary')),
               SizedBox(height: 10),
               Text(
                 _currentData['search_term'].isEmpty 
@@ -463,7 +497,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
                 crossAxisCount: 2,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
-                childAspectRatio: 3, // 保持原始比例作为fallback
+                childAspectRatio: 2.5, // 保持原始比例作为fallback
               ),
               itemCount: items.length,
               itemBuilder: (context, index) {
@@ -488,6 +522,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
         
         return Card(
           elevation: 3,
+          color: ThemeManager.getThemeColor('background'),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: InkWell(
             onTap: () => _openModUrl(mod['url'] ?? ''),
@@ -613,9 +648,9 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
             return Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                color: Colors.grey[200],
+                color: ThemeManager.getThemeColor('surface'),
               ),
-              child: Icon(Icons.extension, size: 40, color: Colors.grey[600]),
+              child: Icon(Icons.extension, size: 40, color: ThemeManager.getThemeColor('text_secondary')),
             );
           },
           loadingBuilder: (context, child, loadingProgress) {
@@ -623,14 +658,14 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
             return Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                color: Colors.grey[100],
+                color: ThemeManager.getThemeColor('surface'),
               ),
               child: Center(
                 child: CircularProgressIndicator(
                   value: loadingProgress.expectedTotalBytes != null
                       ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
                       : null,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                  valueColor: AlwaysStoppedAnimation<Color>(ThemeManager.getThemeColor('primary')),
                 ),
               ),
             );
@@ -641,9 +676,9 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
       return Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
-          color: Colors.grey[200],
+          color: ThemeManager.getThemeColor('surface'),
         ),
-        child: Icon(Icons.extension, size: 40, color: Colors.grey[600]),
+        child: Icon(Icons.extension, size: 40, color: ThemeManager.getThemeColor('text_secondary')),
       );
     }
   }
@@ -654,7 +689,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
     return SingleChildScrollView(
       child: Text(
         description,
-        style: ThemeManager.bodyTextStyle(size: 11).copyWith(color: Colors.grey[700]),
+        style: ThemeManager.bodyTextStyle(size: 11),
       ),
     );
   }
@@ -675,7 +710,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
         
         // 订阅数
         if ((mod['subscriptions'] ?? 0) > 0) ...[
-          Icon(Icons.people, size: 12, color: Colors.blue),
+          Icon(Icons.people, size: 12, color: ThemeManager.getThemeColor('primary')),
           SizedBox(width: 2),
           Text(
             '${mod['subscriptions']}',
@@ -686,7 +721,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
         
         // 文件大小（如果有）
         if ((mod['file_size'] ?? '').isNotEmpty) ...[
-          Icon(Icons.storage, size: 12, color: Colors.green),
+          Icon(Icons.storage, size: 12, color: ThemeManager.getThemeColor('success')),
           SizedBox(width: 2),
           Text(
             mod['file_size'],
@@ -699,14 +734,18 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
         Container(
           padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color: isSubscribed ? Colors.blue[100] : Colors.grey[200],
+            color: isSubscribed 
+                ? ThemeManager.getThemeColor('primary').withOpacity(0.3) 
+                : ThemeManager.getThemeColor('surface'),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(
             isSubscribed ? '本地已下载' : '需订阅',
             style: TextStyle(
               fontSize: 10,
-              color: isSubscribed ? Colors.blue[800] : Colors.grey[600],
+              color: isSubscribed 
+                  ? ThemeManager.getThemeColor('primary') 
+                  : ThemeManager.getThemeColor('text_secondary'),
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -751,16 +790,16 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
             // 上一页按钮
             IconButton(
               onPressed: currentPage > 1 ? () => _onPageChange(currentPage - 1) : null,
-              icon: Icon(Icons.chevron_left),
+              icon: Icon(Icons.chevron_left, color: ThemeManager.getThemeColor('text_primary')),
             ),
             
             // 页码显示
-            Text('第 $currentPage 页 / 共 $totalPages 页'),
+            Text('第 $currentPage 页 / 共 $totalPages 页', style: ThemeManager.bodyTextStyle()),
             
             // 下一页按钮
             IconButton(
               onPressed: currentPage < totalPages ? () => _onPageChange(currentPage + 1) : null,
-              icon: Icon(Icons.chevron_right),
+              icon: Icon(Icons.chevron_right, color: ThemeManager.getThemeColor('text_primary')),
             ),
           ],
         ),
@@ -785,11 +824,12 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
       children: [
         headingText('创意工坊', level: 1),
         IconButton(
-          icon: Icon(Icons.refresh),
+          icon: Icon(Icons.refresh, color: ThemeManager.getThemeColor('text_primary')),
           onPressed: () async {
             await _loadInitialData(isRefresh: true);
           },
           tooltip: '刷新',
+          color: ThemeManager.getThemeColor('text_primary'),
         ),
       ],
     );

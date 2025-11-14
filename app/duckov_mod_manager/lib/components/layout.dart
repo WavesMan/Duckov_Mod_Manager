@@ -33,7 +33,7 @@ class _AppLayoutState extends State<AppLayout> {
           duration: Duration(milliseconds: 300),
           width: _sidebarExpanded ? 250 : 80,
           child: Container(
-            color: ThemeManager.getThemeColor('sidebar_background'),
+            color: ThemeManager.getThemeColor('background'),
             child: Column(
               children: [
                 // 应用标题和切换按钮
@@ -67,6 +67,10 @@ class _AppLayoutState extends State<AppLayout> {
                       return ListTile(
                         leading: Icon(item.icon),
                         title: _sidebarExpanded ? Text(item.title) : null,
+                        // 导航项文本颜色
+                        textColor: widget.currentPageIndex == index
+                            ? ThemeManager.getThemeColor('primary')
+                            : ThemeManager.getThemeColor('text_secondary'),
                         selected: widget.currentPageIndex == index,
                         onTap: () {
                           widget.onPageChanged(index);

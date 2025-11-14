@@ -16,6 +16,8 @@ const Map<String, dynamic> defaultConfig = {
   "auto_update": true,
   "minimize_to_tray": false,
   "animations_enabled": true,
+  // 主题模式配置：light, dark, system
+  "theme_mode": "system",
   // 版本检查相关配置
   "last_update_check": null,  // 最后检查更新时间
   "current_version": "0.1.0",  // 当前应用版本

@@ -64,9 +64,9 @@ class SettingPageState extends State<SettingPage> {
     if (!_validateConfigValue(key, value)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('配置值无效，请检查输入'),
-            backgroundColor: Colors.red,
+          SnackBar(
+            content: const Text('配置值无效，请检查输入'),
+            backgroundColor: ThemeManager.getThemeColor('error'),
           ),
         );
       }
@@ -89,6 +89,10 @@ class SettingPageState extends State<SettingPage> {
       case 'animations_enabled':
         return value is bool;
       
+      case 'theme_mode':
+        const validThemeModes = ['light', 'dark', 'system'];
+        return value is String && validThemeModes.contains(value);
+      
       case 'language':
         const validLanguages = ['简体中文', 'English', '日本語'];
         return value is String && validLanguages.contains(value);
@@ -104,10 +108,82 @@ class SettingPageState extends State<SettingPage> {
     }
   }
 
+  /// 更新主题模式
+  Future<void> _updateThemeMode(String themeMode) async {
+    try {
+      // 更新配置
+      await _updateConfig('theme_mode', themeMode);
+      
+      // 根据配置值转换为AppThemeMode枚举
+      AppThemeMode appThemeMode;
+      switch (themeMode) {
+        case 'light':
+          appThemeMode = AppThemeMode.light;
+          break;
+        case 'dark':
+          appThemeMode = AppThemeMode.dark;
+          break;
+        case 'system':
+        default:
+          appThemeMode = AppThemeMode.system;
+          break;
+      }
+      
+      // 应用主题模式
+      ThemeManager.setThemeMode(appThemeMode);
+      
+      // 显示成功消息
+      if (mounted) {
+        String displayName;
+        switch (themeMode) {
+          case 'light':
+            displayName = '浅色模式';
+            break;
+          case 'dark':
+            displayName = '深色模式';
+            break;
+          case 'system':
+          default:
+            displayName = '跟随系统';
+            break;
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('主题模式已切换到: $displayName'),
+            backgroundColor: ThemeManager.getThemeColor('success'),
+          ),
+        );
+      }
+      
+      // 触发界面重建以应用新主题
+      if (mounted) {
+        setState(() {
+          // 重新加载配置以更新UI
+          _loadConfig();
+        });
+      }
+      
+      print('[Settings] 主题模式已更新: $themeMode');
+      
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('切换主题模式失败: $e'),
+            backgroundColor: ThemeManager.getThemeColor('error'),
+          ),
+        );
+      }
+      print('[Settings] 更新主题模式时出错: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
+        backgroundColor: ThemeManager.getThemeColor('background'),
         appBar: AppBar(
           title: const Text('设置'),
         ),
@@ -118,8 +194,15 @@ class SettingPageState extends State<SettingPage> {
     }
 
     return Scaffold(
+      backgroundColor: ThemeManager.getThemeColor('surface'),
       appBar: AppBar(
-        title: const Text('设置'),
+        backgroundColor: ThemeManager.getThemeColor('surface'),
+        title: Text(
+            '设置',
+            style: TextStyle(
+              color: ThemeManager.getThemeColor('text_primary'),
+            ),
+        ),
       ),
       body: Stack(
         children: [
@@ -159,10 +242,10 @@ class SettingPageState extends State<SettingPage> {
             child: Container(
               padding: const EdgeInsets.all(16.0),
               decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
+                color: ThemeManager.getThemeColor('surface'),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: ThemeManager.getThemeColor('text_primary').withOpacity(0.1),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -180,6 +263,7 @@ class SettingPageState extends State<SettingPage> {
   Widget _buildHeader() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      // layout颜色跟随主题：字体用主题文本色，背景交给 Scaffold/Container 控制
       children: [
         Text(
           '设置',
@@ -200,6 +284,7 @@ class SettingPageState extends State<SettingPage> {
     final bool hasValidPath = gameDirectory.isNotEmpty;
     
     return Card(
+      color: ThemeManager.getThemeColor('background'),
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -228,13 +313,13 @@ class SettingPageState extends State<SettingPage> {
                       if (hasValidPath) ...[
                         Text(
                           gameDirectory,
-                          style: ThemeManager.bodyTextStyle(size: 12, color: Colors.green),
+                          style: ThemeManager.bodyTextStyle(size: 12, color: ThemeManager.getThemeColor('success')),
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '✓ 路径有效',
-                          style: ThemeManager.bodyTextStyle(size: 10, color: Colors.green),
+                          style: ThemeManager.bodyTextStyle(size: 10, color: ThemeManager.getThemeColor('success')),
                         ),
                       ] else ...[
                         Text(
@@ -263,7 +348,7 @@ class SettingPageState extends State<SettingPage> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.blue[50],
+                color: ThemeManager.getThemeColor('primary'),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -271,11 +356,11 @@ class SettingPageState extends State<SettingPage> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.info_outline, color: Colors.blue[700], size: 16),
+                      Icon(Icons.info_outline, color: ThemeManager.getThemeColor('primary'), size: 16),
                       const SizedBox(width: 8),
                       Text(
                         '路径选择说明',
-                        style: ThemeManager.headingTextStyle(level: 4, color: Colors.blue[700]),
+                        style: ThemeManager.headingTextStyle(level: 4, color: ThemeManager.getThemeColor('primary')),
                       ),
                     ],
                   ),
@@ -316,7 +401,7 @@ class SettingPageState extends State<SettingPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('游戏目录已更新: $selectedPath'),
-              backgroundColor: Colors.green,
+              backgroundColor: ThemeManager.getThemeColor('success'),
             ),
           );
         }
@@ -330,7 +415,7 @@ class SettingPageState extends State<SettingPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$e'),
-            backgroundColor: Colors.red,
+            backgroundColor: ThemeManager.getThemeColor('error'),
             duration: const Duration(seconds: 5),
             action: SnackBarAction(
               label: '重新选择',
@@ -347,6 +432,7 @@ class SettingPageState extends State<SettingPage> {
   /// 构建常规设置区域
   Widget _buildGeneralSettings() {
     return Card(
+      color: ThemeManager.getThemeColor('background'),
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -358,6 +444,51 @@ class SettingPageState extends State<SettingPage> {
               style: ThemeManager.headingTextStyle(level: 2),
             ),
             const SizedBox(height: 16),
+            
+            // 主题模式选择
+            _buildSettingItem(
+              title: '主题模式',
+              subtitle: '选择应用程序主题外观',
+              trailing: DropdownButton<String>(
+                value: _config['theme_mode'] ?? 'system',
+                dropdownColor: ThemeManager.getThemeColor('background'),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    _updateThemeMode(newValue);
+                  }
+                },
+                items: <String>[
+                  'light',
+                  'dark', 
+                  'system'
+                ].map<DropdownMenuItem<String>>((String value) {
+                  String displayText;
+                  switch (value) {
+                    case 'light':
+                      displayText = '浅色模式';
+                      break;
+                    case 'dark':
+                      displayText = '深色模式';
+                      break;
+                    case 'system':
+                      displayText = '跟随系统';
+                      break;
+                    default:
+                      displayText = value;
+                  }
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(
+                        displayText,
+                        style: TextStyle(
+                          color: ThemeManager.getThemeColor('text_primary'),
+                        ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const Divider(),
             
             // 自动检查更新
             _buildSettingItem(
@@ -414,6 +545,7 @@ class SettingPageState extends State<SettingPage> {
     final currentVersion = versionManager.getCurrentVersion();
     
     return Card(
+      color: ThemeManager.getThemeColor('background'),
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -483,17 +615,17 @@ class SettingPageState extends State<SettingPage> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.red[50],
+            color: ThemeManager.getThemeColor('error').withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             children: [
-              const Icon(Icons.error_outline, color: Colors.red, size: 20),
+              Icon(Icons.error_outline, color: ThemeManager.getThemeColor('error'), size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   '检查更新失败: $error',
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: ThemeManager.getThemeColor('error')),
                 ),
               ),
             ],
@@ -503,7 +635,9 @@ class SettingPageState extends State<SettingPage> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: hasUpdate ? Colors.green[50] : Colors.blue[50],
+            color: hasUpdate 
+                ? ThemeManager.getThemeColor('success').withOpacity(0.1) 
+                : ThemeManager.getThemeColor('primary').withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
@@ -512,13 +646,17 @@ class SettingPageState extends State<SettingPage> {
               Row(
                 children: [
                   Icon(hasUpdate ? Icons.update : Icons.check_circle, 
-                       color: hasUpdate ? Colors.green : Colors.blue, 
+                       color: hasUpdate 
+                           ? ThemeManager.getThemeColor('success') 
+                           : ThemeManager.getThemeColor('primary'), 
                        size: 20),
                   const SizedBox(width: 8),
                   Text(
                     hasUpdate ? '发现新版本: $latestVersion' : '当前已是最新版本',
                     style: TextStyle(
-                      color: hasUpdate ? Colors.green : Colors.blue[800],
+                      color: hasUpdate 
+                          ? ThemeManager.getThemeColor('success') 
+                          : ThemeManager.getThemeColor('primary'),
                       fontWeight: FontWeight.bold,
                     ),
                   ),

@@ -195,52 +195,66 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            headingText('欢迎使用Duckov Mod Manager', level: 1),
-            SizedBox(height: 10),
-            bodyText('这是一个逃离鸭科夫的模组管理工具，可以帮助您轻松管理游戏模组。'),
-            
-            Divider(height: 20),
-
-            headingText('游戏控制', level: 2),
-            SizedBox(height: 5),
-            bodyText('快速启动或重启您的游戏'),
-            SizedBox(height: 15),
-
-            Row(
-              children: [
-                _buildLaunchButton(),
-                SizedBox(width: 10),
-                _buildRestartButton(),
-              ],
-            ),
-            
-            SizedBox(height: 10),
-            _buildStatusText(),
-
-            Divider(height: 20),
-            
-            headingText('开始使用', level: 2),
-            SizedBox(height: 5),
-            bodyText('点击左侧导航栏中的选项来开始使用不同的功能。'),
-            
-            Divider(height: 20),
-            
-            Text(
-              '版本 0.1.0',
-              style: TextStyle(
-                fontSize: 12,
-                color: ThemeManager.getThemeColors()['text_secondary'],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Container(
+          // 这层就是铺满 layout 区的背景
+          color: ThemeManager.getThemeColor('surface'),
+          child: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: constraints.maxWidth,
+                minHeight: constraints.maxHeight,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 800, // 保持中间内容区域最大宽度
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        headingText('欢迎使用Duckov Mod Manager', level: 1),
+                        SizedBox(height: 10),
+                        bodyText('这是一个逃离鸭科夫的模组管理工具，可以帮助您轻松管理游戏模组。'),
+                        Divider(height: 20),
+                        headingText('游戏控制', level: 2),
+                        SizedBox(height: 5),
+                        bodyText('快速启动或重启您的游戏'),
+                        SizedBox(height: 15),
+                        Row(
+                          children: [
+                            _buildLaunchButton(),
+                            SizedBox(width: 10),
+                            _buildRestartButton(),
+                          ],
+                        ),
+                        SizedBox(height: 10),
+                        _buildStatusText(),
+                        Divider(height: 20),
+                        headingText('开始使用', level: 2),
+                        SizedBox(height: 5),
+                        bodyText('点击左侧导航栏中的选项来开始使用不同的功能。'),
+                        Divider(height: 20),
+                        Text(
+                          '版本 0.2.1',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: ThemeManager.getThemeColors()['text_secondary'],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

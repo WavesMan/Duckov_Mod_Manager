@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../services/version_manager.dart';
+import '../services/theme_manager.dart';
 
 class UpdateDialog extends StatefulWidget {
   final Map<String, dynamic> updateInfo;
@@ -25,11 +26,12 @@ class _UpdateDialogState extends State<UpdateDialog> {
     final downloadUrl = widget.updateInfo['download_url'] as String? ?? '';
 
     return AlertDialog(
+      backgroundColor: ThemeManager.getThemeColor('surface'),
       title: Row(
         children: [
-          const Icon(Icons.system_update, color: Colors.blue),
+          Icon(Icons.system_update, color: ThemeManager.getThemeColor('primary')),
           const SizedBox(width: 10),
-          Text(hasUpdate ? '发现新版本' : '版本信息'),
+          Text(hasUpdate ? '发现新版本' : '版本信息', style: ThemeManager.headingTextStyle(level: 4)),
         ],
       ),
       content: SizedBox(
@@ -43,28 +45,61 @@ class _UpdateDialogState extends State<UpdateDialog> {
               // 版本信息
               _buildVersionInfo(currentVersion, latestVersion, hasUpdate),
               const SizedBox(height: 16),
-              
               // 更新说明标题
-              const Text(
+              Text(
                 '更新说明',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: ThemeManager.headingTextStyle(level: 4),
               ),
               const SizedBox(height: 8),
               
               // 更新说明内容 (Markdown格式，支持选择和复制)
+              // 更新说明内容 (Markdown格式，支持选择和复制)
               Container(
                 constraints: const BoxConstraints(maxHeight: 200),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                  color: ThemeManager.getThemeColor('background'),
+                  border: Border.all(
+                    color: ThemeManager
+                        .getThemeColor('text_secondary')
+                        .withOpacity(0.3),
+                  ),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Scrollbar(
                   child: Markdown(
                     data: releaseNotes,
                     selectable: true,
+                    styleSheet: MarkdownStyleSheet.fromTheme(
+                      Theme.of(context).copyWith(
+                        // 整体背景/画布颜色，避免暗色下出现白底
+                        scaffoldBackgroundColor:
+                        ThemeManager.getThemeColor('background'),
+                        canvasColor:
+                        ThemeManager.getThemeColor('background'),
+                        textTheme: Theme.of(context).textTheme.apply(
+                          bodyColor: ThemeManager
+                              .getThemeColor('text_primary'),
+                          displayColor: ThemeManager
+                              .getThemeColor('text_primary'),
+                        ),
+                      ),
+                    ).copyWith(
+                      // 如需可单独覆盖代码块、链接等
+                      a: ThemeManager.bodyTextStyle(
+                        size: 14,
+                        color: ThemeManager.getThemeColor('primary'),
+                      ),
+                      p: ThemeManager.bodyTextStyle(size: 14),
+                      code: ThemeManager.bodyTextStyle(
+                        size: 13,
+                        color: ThemeManager.getThemeColor('on_background'),
+                      ).copyWith(
+                        backgroundColor: ThemeManager
+                            .getThemeColor('surface')
+                            .withOpacity(0.6),
+                        fontFamily: 'monospace',
+                      ),
+                    ),
                     onTapLink: (text, href, title) {
                       if (href != null) _launchURL(href);
                     },
@@ -97,8 +132,8 @@ class _UpdateDialogState extends State<UpdateDialog> {
               Navigator.of(context).pop('update');
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
+              backgroundColor: ThemeManager.getThemeColor('primary'),
+              foregroundColor: ThemeManager.getThemeColor('on_primary'),
             ),
             child: const Text('前往更新'),
           ),
@@ -112,33 +147,35 @@ class _UpdateDialogState extends State<UpdateDialog> {
       children: [
         Text(
           '当前版本: v$currentVersion',
-          style: const TextStyle(fontSize: 14),
+          style: ThemeManager.bodyTextStyle(size: 14),
         ),
         const SizedBox(height: 4),
         Text(
           '最新版本: v$latestVersion',
           style: TextStyle(
             fontSize: 14,
-            color: hasUpdate ? Colors.red : Colors.green,
+            color: hasUpdate 
+                ? ThemeManager.getThemeColor('error') 
+                : ThemeManager.getThemeColor('success'),
             fontWeight: hasUpdate ? FontWeight.bold : FontWeight.normal,
           ),
         ),
         if (hasUpdate) ...[
           const SizedBox(height: 8),
-          const Text(
+          Text(
             '发现新版本，请及时更新以获得最新功能和修复',
             style: TextStyle(
               fontSize: 12,
-              color: Colors.red,
+              color: ThemeManager.getThemeColor('error'),
             ),
           ),
         ] else ...[
           const SizedBox(height: 8),
-          const Text(
+          Text(
             '您当前使用的是最新版本',
             style: TextStyle(
               fontSize: 12,
-              color: Colors.green,
+              color: ThemeManager.getThemeColor('success'),
             ),
           ),
         ]

@@ -717,6 +717,8 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
       child: TextField(
         decoration: InputDecoration(
           hintText: '搜索模组...',
+          // 添加文本颜色
+          hintStyle: const TextStyle(color: Colors.grey),
           prefixIcon: const Icon(Icons.search, size: 18),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
@@ -747,28 +749,76 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
   Widget _buildSortControls() {
     return Row(
       children: [
-        const Text('排序:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+        Text('排序:',
+            style:
+            TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: ThemeManager.getThemeColor('text_secondary'),
+            )
+        ),
         const SizedBox(width: 4),
         DropdownButtonHideUnderline(
           child: DropdownButton<String>(
             value: _sortBy,
+            dropdownColor: ThemeManager.getThemeColor('background'),
             onChanged: (value) {
               setState(() {
                 _sortBy = value!;
                 _applyFilters();
               });
             },
-            items: const [
-              DropdownMenuItem(value: 'name', child: Text('名称', style: TextStyle(fontSize: 12))),
-              DropdownMenuItem(value: 'status', child: Text('状态', style: TextStyle(fontSize: 12))),
-              DropdownMenuItem(value: 'size', child: Text('大小', style: TextStyle(fontSize: 12))),
-              DropdownMenuItem(value: 'id', child: Text('ID', style: TextStyle(fontSize: 12))),
+            items: [
+              DropdownMenuItem(
+                  value: 'name',
+                  child: Text(
+                      '名称',
+                      style: TextStyle(
+                          fontSize: 12,
+                        color: ThemeManager.getThemeColor('text_secondary'),
+                      )
+                  )
+              ),
+              DropdownMenuItem(
+                  value: 'status',
+                  child: Text(
+                      '状态',
+                      style: TextStyle(
+                          fontSize: 12,
+                        color: ThemeManager.getThemeColor('text_secondary'),
+                      )
+                  )
+              ),
+              DropdownMenuItem(
+                  value: 'size',
+                  child: Text(
+                      '大小',
+                      style: TextStyle(
+                          fontSize: 12,
+                        color: ThemeManager.getThemeColor('text_secondary'),
+                      )
+                  )
+              ),
+              DropdownMenuItem(
+                  value: 'id',
+                  child: Text(
+                      'ID',
+                      style: TextStyle(
+                          fontSize: 12,
+                        color: ThemeManager.getThemeColor('text_secondary'),
+                      )
+                  )
+              ),
             ],
           ),
         ),
         const SizedBox(width: 8),
         IconButton(
-          icon: Icon(_sortReverse ? Icons.arrow_upward : Icons.arrow_downward, size: 18),
+          icon: Icon(
+              _sortReverse ? Icons.arrow_upward : Icons.arrow_downward,
+              color: ThemeManager.getThemeColor('text_secondary'),
+              size: 18
+          ),
           onPressed: () {
             setState(() {
               _sortReverse = !_sortReverse;
@@ -1014,7 +1064,12 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
       color: Colors.blue.withOpacity(0.1),
       child: Row(
         children: [
-          Text('已选择 ${_selectedModIds.length} 个创意工坊模组'),
+          Text(
+              '已选择 ${_selectedModIds.length} 个创意工坊模组',
+              style: TextStyle(
+                color: ThemeManager.getThemeColor('text_primary'),
+              )
+          ),
           const Spacer(),
           ElevatedButton.icon(
             onPressed: _enableSelectedMods,
@@ -1048,7 +1103,7 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Colors.grey[300]!,
+            color: ThemeManager.getThemeColor('outline'),
             width: 1,
           ),
         ),
@@ -1073,10 +1128,10 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
       height: 140,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.grey[200],
+        color: ThemeManager.getThemeColor('background'),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.grey[300]!,
+          color: ThemeManager.getThemeColor('outline'),
           width: 1,
         ),
       ),
@@ -1086,14 +1141,14 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
           Icon(
             Icons.image_not_supported,
             size: 32,
-            color: Colors.grey[600],
+            color: ThemeManager.getThemeColor('text_secondary'),
           ),
           const SizedBox(height: 8),
           Text(
             '无预览图',
-            style: TextStyle(
-              color: Colors.grey[600],
+            style: ThemeManager.bodyTextStyle().copyWith(
               fontSize: 12,
+              color: ThemeManager.getThemeColor('text_secondary'),
             ),
           ),
         ],
@@ -1109,7 +1164,7 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
               description.isEmpty ? '暂无描述' : description,
               style: ThemeManager.bodyTextStyle().copyWith(
                 fontSize: 11,
-                color: Colors.grey[700],
+                color: ThemeManager.getThemeColor('text_secondary'),
               ),
             ),
           ),
@@ -1125,13 +1180,17 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: isEnabled ? Colors.green : Colors.grey,
+            color: isEnabled 
+                ? ThemeManager.getThemeColor('onSuccess').withOpacity(0.1)
+                : ThemeManager.getThemeColor('surface'),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
             isEnabled ? '已启用' : '已禁用',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: isEnabled
+                  ? ThemeManager.getThemeColor('success')
+                  : ThemeManager.getThemeColor('error'),
               fontSize: 10,
               fontWeight: FontWeight.bold,
             ),
@@ -1167,7 +1226,9 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
         
         return Card(
           elevation: 3,
-          color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.white,
+          color: isSelected 
+              ? ThemeManager.getThemeColor('primary').withOpacity(0.1)
+              : ThemeManager.getThemeColor('background'),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -1304,7 +1365,12 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
               });
             } : null,
           ),
-          Text('第 $_currentPage 页 / 共 $_totalPages 页'),
+          Text(
+              '第 $_currentPage 页 / 共 $_totalPages 页',
+              style: TextStyle(
+                color: ThemeManager.getThemeColor('text_secondary'),
+              )
+          ),
           IconButton(
             icon: const Icon(Icons.chevron_right),
             onPressed: _currentPage < _totalPages ? () {
@@ -1323,14 +1389,37 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: ThemeManager.getThemeColor('surface'),
       appBar: AppBar(
-        title: const Text('模组管理'),
+        backgroundColor: ThemeManager.getThemeColor('surface'),
+        title: Text(
+            '模组管理',
+            style: TextStyle(
+              color: ThemeManager.getThemeColor('text_primary'),
+            ),
+        ),
         bottom: TabBar(
           controller: _tabController,
           onTap: _onTabChanged,
-          tabs: const [
-            Tab(text: '创意工坊', icon: Icon(Icons.store)),
-            Tab(text: '本地模组', icon: Icon(Icons.folder)),
+          tabs: [
+            Tab(
+              icon: const Icon(Icons.store),
+              child: Text(
+                "创意工坊",
+                style: TextStyle(
+                  color: ThemeManager.getThemeColor('text_primary'),
+                ),
+              )
+            ),
+            Tab(
+              icon: const Icon(Icons.folder),
+              child: Text(
+                "本地模组",
+                style: TextStyle(
+                  color: ThemeManager.getThemeColor('text_primary'),
+                ),
+              )
+            ),
           ],
         ),
         actions: [
@@ -1342,7 +1431,9 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
               children: [
                 Icon(
                   Icons.sync,
-                  color: _isBridgeConnected ? Colors.blue : Colors.grey,
+                  color: _isBridgeConnected 
+                      ? ThemeManager.getThemeColor('primary') 
+                      : ThemeManager.getThemeColor('text_secondary'),
                 ),
                 if (_isSyncInProgress)
                   Positioned.fill(
@@ -1426,9 +1517,17 @@ class _ModPageState extends State<ModPage> with SingleTickerProviderStateMixin {
                 Checkbox(
                   value: _selectAll,
                   onChanged: _toggleSelectAll,
+                  // 跟随主题颜色
+                  activeColor: ThemeManager.getThemeColor('primary'),
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                const Text('全选', style: TextStyle(fontSize: 12)),
+                Text(
+                    '全选',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: ThemeManager.getThemeColor('text_primary'),
+                    ),
+                ),
                 const Spacer(),
               ],
             ),
