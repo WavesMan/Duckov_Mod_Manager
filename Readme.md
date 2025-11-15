@@ -9,7 +9,7 @@
 
 这是一个ModManager的桥，用于实现游戏内的Mod Core与外部的数据交互
 
-ModManagerBridge的API规范文档参阅 [ModManagerBridge API](ModManagerBridge/ModManagerBridge/README.md)
+ModManagerBridge的API规范文档参阅 [ModManagerBridge API](/ModManagerBridge/ModManagerBridge/Readme.md)
 
 ## 关于 Duckov Mod Manager
 

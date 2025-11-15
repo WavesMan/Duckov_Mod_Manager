@@ -164,6 +164,7 @@ storage/
 #.idea
 .idea/
 .vscode/
+.trae
 
 # UV
 .python-version
