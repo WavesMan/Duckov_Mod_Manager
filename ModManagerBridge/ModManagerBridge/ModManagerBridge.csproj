@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ModManagerBridge</AssemblyName>
+    <RootNamespace>ModManagerBridge</RootNamespace>
+    <OutputPath>./Release/</OutputPath>
+    <DuckovPath>E:\SteamLibrary\steamapps\common\Escape from Duckov</DuckovPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="$(DuckovPath)\Duckov_Data\Managed\TeamSoda.*" />
+    <Reference Include="$(DuckovPath)\Duckov_Data\Managed\ItemStatsSystem.dll" />
+    <Reference Include="$(DuckovPath)\Duckov_Data\Managed\Unity*" />
+  </ItemGroup>
+    
+</Project>
