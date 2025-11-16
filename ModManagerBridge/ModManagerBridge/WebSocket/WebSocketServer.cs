@@ -36,7 +36,7 @@ namespace ModManagerBridge.WebSocket
                 listenerThread.Start();
                 isServerRunning = true;
                 
-                Debug.Log($"WebSocket服务器已在端口 {port} 上启动");
+                Debug.Log($"WebSocket服务器启动，端口: {port}");
             }
             catch (Exception ex)
             {
@@ -50,12 +50,14 @@ namespace ModManagerBridge.WebSocket
         private void ListenForClients()
         {
             tcpListener.Start();
+            Debug.Log($"WebSocket服务器开始监听，端口: {port}");
             
             while (isServerRunning)
             {
                 try
                 {
                     TcpClient client = tcpListener.AcceptTcpClient();
+                    var remote = client?.Client?.RemoteEndPoint?.ToString() ?? "未知地址";
                     WebSocketConnection connection = new WebSocketConnection(client, modCore);
                     connections.Add(connection);
                     
@@ -63,7 +65,7 @@ namespace ModManagerBridge.WebSocket
                     clientThread.IsBackground = true;
                     clientThread.Start();
                     
-                    Debug.Log("新的WebSocket客户端已连接");
+                    Debug.Log($"新的WebSocket客户端已连接，远端: {remote}，当前连接数: {connections.Count}");
                 }
                 catch (Exception ex)
                 {
@@ -73,6 +75,7 @@ namespace ModManagerBridge.WebSocket
                     }
                 }
             }
+            Debug.Log("WebSocket服务器停止监听");
         }
 
         public void StopServer()
@@ -85,12 +88,14 @@ namespace ModManagerBridge.WebSocket
             }
             
             // 关闭所有连接
+            Debug.Log($"WebSocket服务器停止中，关闭连接数: {connections.Count}");
             foreach (var connection in connections)
             {
                 connection.Close();
             }
             
             connections.Clear();
+            Debug.Log("WebSocket服务器已停止");
         }
     }
 }

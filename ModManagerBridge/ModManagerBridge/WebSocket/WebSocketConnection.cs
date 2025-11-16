@@ -3,6 +3,8 @@ using System.Text;
 using System.Net.Sockets;
 using UnityEngine;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using ModManagerBridge.Models;
 using ModManagerBridge.Service;
 using ModManagerBridge.Core;
@@ -37,21 +39,119 @@ namespace ModManagerBridge.WebSocket
                     return;
                 }
 
-                // 处理消息
-                byte[] buffer = new byte[1024];
+                // 处理消息（按帧精确读取）
                 while (isConnected && tcpClient.Connected)
                 {
-                    int bytesRead = stream.Read(buffer, 0, buffer.Length);
-                    if (bytesRead > 0)
+                    int b0 = stream.ReadByte();
+                    if (b0 < 0) break;
+                    int b1 = stream.ReadByte();
+                    if (b1 < 0) break;
+
+                    byte opcode = (byte)(b0 & 0x0F);
+                    bool rsv1 = (b0 & 0x40) != 0;
+                    bool isMasked = (b1 & 0x80) != 0;
+                    int payloadLen = b1 & 0x7F;
+
+                    if (payloadLen == 126)
                     {
-                        string message = DecodeWebSocketFrame(buffer, bytesRead);
-                        // 检查消息是否为空或null
-                        if (!string.IsNullOrEmpty(message))
+                        int hi = stream.ReadByte();
+                        int lo = stream.ReadByte();
+                        if (hi < 0 || lo < 0) break;
+                        payloadLen = (hi << 8) | lo;
+                    }
+                    else if (payloadLen == 127)
+                    {
+                        byte[] lenBytes = new byte[8];
+                        int read = stream.Read(lenBytes, 0, 8);
+                        if (read < 8) break;
+                        ulong ulen = BitConverter.ToUInt64(new byte[] { lenBytes[7], lenBytes[6], lenBytes[5], lenBytes[4], lenBytes[3], lenBytes[2], lenBytes[1], lenBytes[0] }, 0);
+                        if (ulen > int.MaxValue) continue;
+                        payloadLen = (int)ulen;
+                    }
+
+                    byte[] mask = null;
+                    if (isMasked)
+                    {
+                        mask = new byte[4];
+                        int mread = stream.Read(mask, 0, 4);
+                        if (mread < 4) break;
+                    }
+
+                    byte[] payload = new byte[payloadLen];
+                    int total = 0;
+                    while (total < payloadLen)
+                    {
+                        int n = stream.Read(payload, total, payloadLen - total);
+                        if (n <= 0) break;
+                        total += n;
+                    }
+                    if (total < payloadLen) break;
+
+                    if (isMasked)
+                    {
+                        for (int i = 0; i < payloadLen; i++)
+                            payload[i] = (byte)(payload[i] ^ mask[i % 4]);
+                    }
+
+                    if (opcode == 0x09)
+                    {
+                        // Ping -> Pong
+                        byte[] pong = new byte[payloadLen + (payloadLen < 126 ? 2 : (payloadLen < 65536 ? 4 : 10))];
+                        int idx = 0;
+                        pong[idx++] = 0x8A; // FIN + Pong
+                        if (payloadLen < 126)
                         {
-                            // 这里需要处理请求
-                            HandleWebSocketRequest(message);
+                            pong[idx++] = (byte)payloadLen;
                         }
-                        // 如果消息为空，忽略它而不是尝试处理
+                        else if (payloadLen < 65536)
+                        {
+                            pong[idx++] = 126;
+                            pong[idx++] = (byte)((payloadLen >> 8) & 0xFF);
+                            pong[idx++] = (byte)(payloadLen & 0xFF);
+                        }
+                        else
+                        {
+                            pong[idx++] = 127;
+                            int len = payloadLen;
+                            for (int i = 0; i < 8; i++) { pong[9 - i] = (byte)(len & 0xFF); len >>= 8; }
+                            idx = 10;
+                        }
+                        Array.Copy(payload, 0, pong, idx, payloadLen);
+                        stream.Write(pong, 0, pong.Length);
+                        stream.Flush();
+                        continue;
+                    }
+
+                    if (opcode != 0x01) continue;
+
+                    string message;
+                    if ((b0 & 0x40) != 0)
+                    {
+                        try
+                        {
+                            using (var input = new MemoryStream())
+                            {
+                                input.Write(payload, 0, payloadLen);
+                                input.Write(new byte[] { 0x00, 0x00, 0xFF, 0xFF }, 0, 4);
+                                input.Position = 0;
+                                using (var deflate = new DeflateStream(input, CompressionMode.Decompress))
+                                using (var output = new MemoryStream())
+                                {
+                                    deflate.CopyTo(output);
+                                    message = Encoding.UTF8.GetString(output.ToArray());
+                                }
+                            }
+                        }
+                        catch { continue; }
+                    }
+                    else
+                    {
+                        message = Encoding.UTF8.GetString(payload);
+                    }
+
+                    if (!string.IsNullOrEmpty(message))
+                    {
+                        HandleWebSocketRequest(message);
                     }
                 }
             }
@@ -106,24 +206,55 @@ namespace ModManagerBridge.WebSocket
         {
             try
             {
-                byte[] buffer = new byte[1024];
-                int bytesRead = stream.Read(buffer, 0, buffer.Length);
-                string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                var sb = new StringBuilder();
+                byte[] buffer = new byte[4096];
+                while (true)
+                {
+                    int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                    if (bytesRead <= 0) break;
+                    sb.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
+                    string current = sb.ToString();
+                    if (current.Contains("\r\n\r\n")) break;
+                    if (sb.Length > 65536)
+                    {
+                        Debug.LogError("握手失败，请求头过长");
+                        return false;
+                    }
+                }
+
+                string request = sb.ToString();
+                Debug.Log($"握手请求原文:\n{request}");
 
                 string webSocketKey = "";
+                string version = "";
+                bool upgradeOk = false;
+                bool connectionUpgrade = false;
+
                 string[] lines = request.Split(new[] { "\r\n" }, StringSplitOptions.None);
                 foreach (string line in lines)
                 {
-                    if (line.StartsWith("Sec-WebSocket-Key:"))
-                    {
-                        webSocketKey = line.Substring(19).Trim();
-                        break;
-                    }
+                    int idx = line.IndexOf(':');
+                    if (idx <= 0) continue;
+                    string name = line.Substring(0, idx).Trim().ToLowerInvariant();
+                    string value = line.Substring(idx + 1).Trim();
+                    if (name == "sec-websocket-key") webSocketKey = value;
+                    else if (name == "sec-websocket-version") version = value;
+                    else if (name == "upgrade") upgradeOk = value.Equals("websocket", StringComparison.OrdinalIgnoreCase);
+                    else if (name == "connection") connectionUpgrade = value.IndexOf("upgrade", StringComparison.OrdinalIgnoreCase) >= 0;
                 }
 
                 if (string.IsNullOrEmpty(webSocketKey))
                 {
-                    return false;
+                    Debug.LogWarning("握手缺少 Sec-WebSocket-Key，按兼容模式继续");
+                    webSocketKey = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+                }
+                if (!upgradeOk || !connectionUpgrade)
+                {
+                    Debug.LogWarning("握手警告，Upgrade/Connection 头异常");
+                }
+                if (!string.IsNullOrEmpty(version) && version != "13")
+                {
+                    Debug.LogWarning($"握手版本非13: {version}");
                 }
 
                 string responseKey = Convert.ToBase64String(
@@ -133,10 +264,10 @@ namespace ModManagerBridge.WebSocket
                 );
 
                 string response = "HTTP/1.1 101 Switching Protocols\r\n" +
-                                "Upgrade: websocket\r\n" +
-                                "Connection: Upgrade\r\n" +
-                                "Sec-WebSocket-Accept: " + responseKey + "\r\n" +
-                                "\r\n";
+                                  "Upgrade: websocket\r\n" +
+                                  "Connection: Upgrade\r\n" +
+                                  "Sec-WebSocket-Accept: " + responseKey + "\r\n" +
+                                  "\r\n";
 
                 byte[] responseBytes = Encoding.UTF8.GetBytes(response);
                 stream.Write(responseBytes, 0, responseBytes.Length);
@@ -157,9 +288,9 @@ namespace ModManagerBridge.WebSocket
             {
                 byte opcode = (byte)(buffer[0] & 0x0F);
                 bool isMasked = (buffer[1] & 0x80) != 0;
+                bool rsv1 = (buffer[0] & 0x40) != 0;
                 
-                // 如果不是文本帧，返回null
-                if (opcode != 0x01) // 0x01是文本帧
+                if (opcode != 0x01)
                     return null;
 
                 if (!isMasked)
@@ -190,6 +321,29 @@ namespace ModManagerBridge.WebSocket
                 for (int i = 0; i < payloadLength; i++)
                 {
                     payload[i] = (byte)(payload[i] ^ mask[i % 4]);
+                }
+
+                if (rsv1)
+                {
+                    try
+                    {
+                        using (var input = new MemoryStream())
+                        {
+                            input.Write(payload, 0, payloadLength);
+                            input.Write(new byte[] { 0x00, 0x00, 0xFF, 0xFF }, 0, 4);
+                            input.Position = 0;
+                            using (var deflate = new DeflateStream(input, CompressionMode.Decompress))
+                            using (var output = new MemoryStream())
+                            {
+                                deflate.CopyTo(output);
+                                return Encoding.UTF8.GetString(output.ToArray());
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        return null;
+                    }
                 }
 
                 return Encoding.UTF8.GetString(payload);

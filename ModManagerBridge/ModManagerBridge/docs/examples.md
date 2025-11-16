@@ -13,7 +13,7 @@ import json
 def get_mod_list():
     # 连接到 WebSocket 服务器
     ws = websocket.WebSocket()
-    ws.connect("ws://localhost:9001")
+    ws.connect("ws://127.0.0.1:9001/")
     
     # 发送获取模组列表的请求
     request = {
@@ -51,7 +51,7 @@ import json
 def toggle_mod(mod_name, activate=True):
     # 连接到 WebSocket 服务器
     ws = websocket.WebSocket()
-    ws.connect("ws://localhost:9001")
+    ws.connect("ws://127.0.0.1:9001/")
     
     # 发送激活/停用模组的请求
     action = "activate_mod" if activate else "deactivate_mod"
@@ -88,7 +88,7 @@ import json
 def toggle_mods(mod_names, activate=True):
     # 连接到 WebSocket 服务器
     ws = websocket.WebSocket()
-    ws.connect("ws://localhost:9001")
+    ws.connect("ws://127.0.0.1:9001/")
     
     # 发送批量激活/停用模组的请求
     action = "activate_mods" if activate else "deactivate_mods"
@@ -125,7 +125,7 @@ import json
 def rescan_mods():
     # 连接到 WebSocket 服务器
     ws = websocket.WebSocket()
-    ws.connect("ws://localhost:9001")
+    ws.connect("ws://127.0.0.1:9001/")
     
     # 发送重新扫描模组的请求
     request = {
@@ -157,7 +157,7 @@ rescan_mods()
 ```javascript
 function getModList() {
     // 连接到 WebSocket 服务器
-    const ws = new WebSocket("ws://localhost:9001");
+    const ws = new WebSocket("ws://127.0.0.1:9001/");
     
     ws.onopen = function() {
         // 发送获取模组列表的请求
@@ -214,7 +214,61 @@ public class ModManagerBridgeClient
     public async Task ConnectAsync()
     {
         ws = new ClientWebSocket();
-        await ws.ConnectAsync(new Uri("ws://localhost:9001"), CancellationToken.None);
+        await ws.ConnectAsync(new Uri("ws://127.0.0.1:9001/"), CancellationToken.None);
+
+## Dart 示例
+
+### 使用 dart:io WebSocket
+
+```dart
+import 'dart:convert';
+import 'dart:io';
+
+Future<WebSocket> connectBridge() async {
+  final uri = Uri.parse('ws://127.0.0.1:9001/');
+  final ws = await WebSocket.connect(
+    uri.toString(),
+    headers: {
+      'Origin': 'http://localhost',
+    },
+  );
+  ws.pingInterval = const Duration(seconds: 20);
+  return ws;
+}
+
+void sendGetModList(WebSocket ws) {
+  ws.add(jsonEncode({'action': 'get_mod_list', 'data': ''}));
+}
+
+void sendActivateMod(WebSocket ws, String name) {
+  ws.add(jsonEncode({'action': 'activate_mod', 'data': name}));
+}
+
+void sendActivateMods(WebSocket ws, List<String> names) {
+  final arr = jsonEncode(names); // 将数组序列化为字符串
+  ws.add(jsonEncode({'action': 'activate_mods', 'data': arr}));
+}
+
+void sendDeactivateMods(WebSocket ws, List<String> names) {
+  final arr = jsonEncode(names);
+  ws.add(jsonEncode({'action': 'deactivate_mods', 'data': arr}));
+}
+
+Future<void> example() async {
+  final ws = await connectBridge();
+  sendGetModList(ws);
+  ws.listen((data) {
+    print('响应: $data');
+    ws.close();
+  }, onError: (e) {
+    print('错误: $e');
+  });
+}
+```
+
+说明：
+- Dart 客户端默认可能开启 `permessage-deflate` 压缩；服务端会自动解压文本帧，无需额外配置
+- 批量操作时将 `List<String>` 经 `jsonEncode` 后放入 `data`
     }
     
     public async Task<string> SendRequestAsync(string action, string data)

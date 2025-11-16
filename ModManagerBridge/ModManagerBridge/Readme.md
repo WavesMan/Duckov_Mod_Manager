@@ -9,8 +9,8 @@ ModManagerBridge 在端口 9001 上公开了一个 WebSocket 服务器，外部�
 ## 目录
 
 - [WebSocket 连接](#websocket-connection)
-- [API 参考](./docs/api.md)
-- [使用示例](./docs/examples.md)
+- [API 参考](api.md)
+- [使用示例](examples.md)
 - [请求/响应格式](#requestresponse-format)
 - [错误处理](#error-handling)
 
@@ -18,14 +18,31 @@ ModManagerBridge 在端口 9001 上公开了一个 WebSocket 服务器，外部�
 
 要连接到 ModManagerBridge API，请建立到以下地址的 WebSocket 连接：
 ```
-ws://localhost:9001
+ws://127.0.0.1:9001/
 ```
+
+兼容性建议：
+- 使用 IPv4 地址 `127.0.0.1`（避免 `localhost` 解析为 IPv6）
+- 末尾包含根路径 `/`（部分客户端在无路径时行为不一致）
+- 使用现代标准 WebSocket 客户端（浏览器、Dart、.NET）
+
+### 握手说明
+- 服务端读取完整 HTTP 头（直到 `\r\n\r\n`），并大小写不敏感解析关键字段
+- 关键头包括：`Connection: Upgrade`、`Upgrade: websocket`、`Sec-WebSocket-Version: 13`、`Sec-WebSocket-Key`
+- 兼容模式：若缺少 `Sec-WebSocket-Key`，服务端会生成随机键完成握手（不用于认证），标准客户端不受影响
+ - 日志中的“握手警告，Upgrade/Connection 头异常”用于提示头部异常但不影响建立连接
+
+### 压缩帧支持
+- 服务端在帧层兼容 `permessage-deflate` 文本压缩：当收到启用压缩的文本帧（`RSV1` 置位）时，会自动解压并按 UTF-8 解析
+- 该兼容为透明行为，握手阶段不强制扩展协商；标准与 Dart 客户端均可正常收发
 
 服务器期望接收格式正确的 JSON 请求，并将返回 JSON 响应。
 
 ## 请求/响应格式
 
-所有请求和响应都使用 JSON 格式。有关每个端点的详细信息，请参阅 [API 参考](./docs/api.md)。
+所有请求和响应都使用 JSON 格式。有关每个端点的详细信息，请参阅 [API 参考](api.md)。
+
+注意：`data` 字段为字符串类型；当需要传递数组（如批量操作）时，请将数组先 `JSON` 序列化为字符串再放入 `data`。
 
 ### 请求格式
 ```json
@@ -46,7 +63,7 @@ ws://localhost:9001
 
 ## 使用示例
 
-有关各种编程语言的详细示例，请参阅 [使用示例](./docs/examples.md)。
+有关各种编程语言的详细示例，请参阅 [使用示例](examples.md)。
 
 ### Python 示例
 ```python
@@ -55,7 +72,7 @@ import json
 
 # 连接到 WebSocket 服务器
 ws = websocket.WebSocket()
-ws.connect("ws://localhost:9001")
+ws.connect("ws://127.0.0.1:9001/")
 
 # 发送获取模组列表的请求
 request = {
@@ -84,6 +101,9 @@ ws.close()
 }
 ```
 
-## 安全性说明
+## 故障排查
 
-本项目完全遵循 [MIT LICENSE](LICENSE) 开源，您可以对本项目任何部分进行安全审查，当然也包括Issues建议与PR提交
+- 端口监听：Windows 使用 `netstat -ano | findstr 9001`
+- 连接失败：检查是否使用 `ws://127.0.0.1:9001/`，以及防火墙与端口占用
+- 批量操作：确保将数组 `JSON` 序列化为字符串放入 `data`
+ - 请求乱码：若服务端日志显示不可读字符，确认客户端未发送二进制帧；压缩文本帧已自动解压

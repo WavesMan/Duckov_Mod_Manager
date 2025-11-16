@@ -21,7 +21,14 @@ class ModManagerClient:
     async def connect(self):
         """连接到WebSocket服务器"""
         try:
-            self.websocket = await websockets.connect(self.uri)
+            try:
+                self.websocket = await websockets.connect(
+                    self.uri,
+                    origin="http://localhost",
+                    ping_interval=20,
+                )
+            except TypeError:
+                self.websocket = await websockets.connect(self.uri)
             print(f"已连接到 {self.uri}")
             return True
         except Exception as e:
@@ -42,7 +49,7 @@ class ModManagerClient:
 
         request = {
             "action": action,
-            "data": data
+            "data": data if data is not None else ""
         }
 
         try:
@@ -207,7 +214,7 @@ def show_help():
 
 async def main():
     parser = argparse.ArgumentParser(description="ModManagerBridge 测试客户端")
-    parser.add_argument("--host", default="localhost", help="WebSocket服务器主机 (默认: localhost)")
+    parser.add_argument("--host", default="127.0.0.1", help="WebSocket服务器主机 (默认: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=9001, help="WebSocket服务器端口 (默认: 9001)")
     
     subparsers = parser.add_subparsers(dest="command", help="可用命令")
@@ -239,7 +246,7 @@ async def main():
     
     args = parser.parse_args()
     
-    uri = f"ws://{args.host}:{args.port}"
+    uri = f"ws://{args.host}:{args.port}/"
     client = ModManagerClient(uri)
     
     if not await client.connect():

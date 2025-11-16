@@ -6,7 +6,8 @@
 
 - **协议**: WebSocket
 - **端口**: 9001
-- **端点**: `ws://localhost:9001`
+- **端点**: `ws://127.0.0.1:9001/`
+ - **压缩**: 文本帧支持 `permessage-deflate`（服务端自动解压；握手不强制扩展协商）
 
 ## 通用数据结构
 
@@ -35,7 +36,16 @@
 | 字段 | 类型 | 描述 |
 |-------|------|-------------|
 | action | string | 要执行的操作 |
-| data | string | 操作的附加数据 |
+| data | string | 操作的附加数据（字符串）。批量操作请将数组先 JSON 序列化为字符串后传入 |
+
+示例：
+```json
+{ "action": "activate_mods", "data": "[\"ExampleMod1\", \"ExampleMod2\"]" }
+```
+
+注意：
+- 单项操作的数据直接传字符串，例如 `"ExampleMod"`
+- 批量操作的数据为数组的 JSON 字符串，而不是数组对象本身
 
 ### WebSocketResponse
 
@@ -98,7 +108,7 @@
 ```json
 {
   "success": true,
-  "message": "Mod activated successfully"
+  "message": "Mod激活成功"
 }
 ```
 
@@ -124,7 +134,7 @@
 ```json
 {
   "success": true,
-  "message": "Mod deactivated successfully"
+  "message": "Mod停用成功"
 }
 ```
 
@@ -134,7 +144,7 @@
 
 **操作**: `activate_mods`
 
-**数据**: 要激活的模组名称数组
+**数据**: 要激活的模组名称数组（作为 JSON 字符串传入）
 
 **响应数据**: 无
 
@@ -160,7 +170,7 @@
 
 **操作**: `deactivate_mods`
 
-**数据**: 要停用的模组名称数组
+**数据**: 要停用的模组名称数组（作为 JSON 字符串传入）
 
 **响应数据**: 无
 
@@ -202,7 +212,7 @@
 ```json
 {
   "success": true,
-  "message": "Mods rescanned successfully"
+  "message": "Mods重新扫描成功"
 }
 ```
 
@@ -218,7 +228,7 @@
 ```
 
 常见错误消息包括：
-- "Unknown action: [action_name]" - 提供了无效操作时
-- "Mod not found: [mod_name]" - 尝试激活/停用不存在的模组时
-- "Failed to activate mod" - 模组激活失败时
+- "未知操作: [action_name]" - 提供了无效操作时
+- "未找到mod: [mod_name]" - 尝试激活/停用不存在的模组时
+- "无法激活mod" - 模组激活失败时
 - "一次最多只能激活/停用10个mods" - 超过批量操作限制时

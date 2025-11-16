@@ -16,6 +16,7 @@ namespace ModManagerBridge.Service
         /// </summary>
         public string ProcessRequest(WebSocketRequest request)
         {
+            Debug.Log($"处理操作: {request?.action}, 数据长度: {request?.data?.Length ?? 0}");
             switch (request.action?.ToLower())
             {
                 case "get_mod_list":
@@ -37,6 +38,7 @@ namespace ModManagerBridge.Service
                     return HandleDeactivateMods(request.data);
                     
                 default:
+                    Debug.LogWarning($"未知操作: {request?.action}");
                     return JsonUtility.ToJson(new WebSocketResponse { 
                         success = false, 
                         message = "未知操作: " + request.action 
@@ -82,11 +84,13 @@ namespace ModManagerBridge.Service
                     message = "",
                     data = SerializeModList(modList)
                 };
+                Debug.Log($"获取mod列表成功，数量: {modList.Count}");
                 
                 return JsonUtility.ToJson(response);
             }
             catch (Exception ex)
             {
+                Debug.LogError($"获取mod列表错误: {ex.Message}");
                 return JsonUtility.ToJson(new WebSocketResponse { 
                     success = false, 
                     message = "获取mod列表时出错: " + ex.Message 
@@ -174,6 +178,7 @@ namespace ModManagerBridge.Service
             {
                 // 提取mod名称（去除引号）
                 string actualModName = ExtractModName(modName);
+                Debug.Log($"激活mod请求: {actualModName}");
                 
                 // 查找mod
                 ModInfo? targetMod = null;
@@ -188,6 +193,7 @@ namespace ModManagerBridge.Service
                 
                 if (!targetMod.HasValue)
                 {
+                    Debug.LogWarning($"未找到mod: {actualModName}");
                     return JsonUtility.ToJson(new WebSocketResponse { 
                         success = false, 
                         message = "未找到mod: " + actualModName 
@@ -199,6 +205,7 @@ namespace ModManagerBridge.Service
                 
                 if (result != null)
                 {
+                    Debug.Log($"激活mod成功: {actualModName}");
                     return JsonUtility.ToJson(new WebSocketResponse { 
                         success = true, 
                         message = "Mod激活成功" 
@@ -206,6 +213,7 @@ namespace ModManagerBridge.Service
                 }
                 else
                 {
+                    Debug.LogWarning($"激活mod失败: {actualModName}");
                     return JsonUtility.ToJson(new WebSocketResponse { 
                         success = false, 
                         message = "无法激活mod" 
@@ -214,6 +222,7 @@ namespace ModManagerBridge.Service
             }
             catch (Exception ex)
             {
+                Debug.LogError($"激活mod错误: {ex.Message}");
                 return JsonUtility.ToJson(new WebSocketResponse { 
                     success = false, 
                     message = "激活mod时出错: " + ex.Message 
@@ -230,6 +239,7 @@ namespace ModManagerBridge.Service
             {
                 // 提取mod名称（去除引号）
                 string actualModName = ExtractModName(modName);
+                Debug.Log($"停用mod请求: {actualModName}");
                 
                 // 查找mod
                 ModInfo? targetMod = null;
@@ -244,6 +254,7 @@ namespace ModManagerBridge.Service
                 
                 if (!targetMod.HasValue)
                 {
+                    Debug.LogWarning($"未找到mod: {actualModName}");
                     return JsonUtility.ToJson(new WebSocketResponse { 
                         success = false, 
                         message = "未找到mod: " + actualModName 
@@ -252,6 +263,7 @@ namespace ModManagerBridge.Service
                 
                 // 停用mod
                 ModManager.Instance.DeactivateMod(targetMod.Value);
+                Debug.Log($"停用mod成功: {actualModName}");
                 
                 return JsonUtility.ToJson(new WebSocketResponse { 
                     success = true, 
@@ -260,6 +272,7 @@ namespace ModManagerBridge.Service
             }
             catch (Exception ex)
             {
+                Debug.LogError($"停用mod错误: {ex.Message}");
                 return JsonUtility.ToJson(new WebSocketResponse { 
                     success = false, 
                     message = "停用mod时出错: " + ex.Message 
@@ -276,6 +289,7 @@ namespace ModManagerBridge.Service
             {
                 // 解析JSON数组 - 使用更兼容的方法
                 string[] modNames = ParseStringArray(modNamesJson);
+                Debug.Log($"批量激活请求，数量: {modNames.Length}");
                 
                 // 限制一次最多处理10个mods
                 if (modNames.Length > 10)
@@ -332,6 +346,7 @@ namespace ModManagerBridge.Service
                     message += $" true: '{successList}'.";
                 if (failedMods.Count > 0)
                     message += $" false: '{failedList}'.";
+                Debug.Log($"批量激活完成，成功: {successMods.Count}，失败: {failedMods.Count}");
                 
                 return JsonUtility.ToJson(new WebSocketResponse { 
                     success = true, 
@@ -340,6 +355,7 @@ namespace ModManagerBridge.Service
             }
             catch (Exception ex)
             {
+                Debug.LogError($"批量激活错误: {ex.Message}");
                 return JsonUtility.ToJson(new WebSocketResponse { 
                     success = false, 
                     message = "批量激活mods时出错: " + ex.Message 
@@ -356,6 +372,7 @@ namespace ModManagerBridge.Service
             {
                 // 解析JSON数组 - 使用更兼容的方法
                 string[] modNames = ParseStringArray(modNamesJson);
+                Debug.Log($"批量停用请求，数量: {modNames.Length}");
                 
                 // 限制一次最多处理10个mods
                 if (modNames.Length > 10)
@@ -404,6 +421,7 @@ namespace ModManagerBridge.Service
                     message += $" true: '{successList}'.";
                 if (failedMods.Count > 0)
                     message += $" false: '{failedList}'.";
+                Debug.Log($"批量停用完成，成功: {successMods.Count}，失败: {failedMods.Count}");
                 
                 return JsonUtility.ToJson(new WebSocketResponse { 
                     success = true, 
@@ -412,6 +430,7 @@ namespace ModManagerBridge.Service
             }
             catch (Exception ex)
             {
+                Debug.LogError($"批量停用错误: {ex.Message}");
                 return JsonUtility.ToJson(new WebSocketResponse { 
                     success = false, 
                     message = "批量停用mods时出错: " + ex.Message 
@@ -469,6 +488,7 @@ namespace ModManagerBridge.Service
             try
             {
                 ModManager.Rescan();
+                Debug.Log("重新扫描mods完成");
                 return JsonUtility.ToJson(new WebSocketResponse { 
                     success = true, 
                     message = "Mods重新扫描成功" 
@@ -476,6 +496,7 @@ namespace ModManagerBridge.Service
             }
             catch (Exception ex)
             {
+                Debug.LogError($"重新扫描错误: {ex.Message}");
                 return JsonUtility.ToJson(new WebSocketResponse { 
                     success = false, 
                     message = "重新扫描mods时出错: " + ex.Message 
