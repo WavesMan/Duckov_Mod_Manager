@@ -246,7 +246,7 @@ class _HomePageState extends State<HomePage> {
                         bodyText('点击左侧导航栏中的选项来开始使用不同的功能。'),
                         Divider(height: 20),
                         Text(
-                          '版本 0.2.1',
+                          '版本 0.2.4',
                           style: TextStyle(
                             fontSize: 12,
                             color: ThemeManager.getThemeColors()['text_secondary'],

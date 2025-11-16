@@ -6,7 +6,6 @@ import 'page/mod_page.dart';
 import 'page/mod_collections_page.dart';
 import 'page/steam_workshop_page.dart';
 import 'page/setting_page.dart';
-import 'services/preload_manager.dart';
 import 'services/config_manager.dart';
 import 'services/version_manager.dart';
 import 'services/collections/collection_service.dart';
@@ -195,9 +194,17 @@ class _MainAppLayoutState extends State<MainAppLayout> {
 
   /// 获取带动画的当前页面
   Widget _getCurrentPageWithAnimation() {
-    return IndexedStack(
-      index: _currentPageIndex,
-      children: _pages,
+    final child = KeyedSubtree.wrap(
+      _pages[_currentPageIndex],
+      _currentPageIndex,
+    );
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 150),
+      reverseDuration: const Duration(milliseconds: 150),
+      switchInCurve: Curves.easeIn,
+      switchOutCurve: Curves.easeOut,
+      transitionBuilder: (c, animation) => FadeTransition(opacity: animation, child: c),
+      child: child,
     );
   }
 
