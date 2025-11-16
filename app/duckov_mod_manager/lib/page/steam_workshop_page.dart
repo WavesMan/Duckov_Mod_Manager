@@ -48,6 +48,14 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
   bool _isLoading = false;
   bool _isReloading = false; // 用于控制刷新动画
   String? _errorMessage;
+  void _onThemeChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+  void _safeSetState(VoidCallback fn) {
+    if (!mounted) return;
+    setState(fn);
+  }
   
   @override
   void initState() {
@@ -56,6 +64,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
     
     // 监听滚动事件，用于控制回到顶部按钮的显示
     _scrollController.addListener(_scrollListener);
+    ThemeManager.addListener(_onThemeChanged);
   }
   
   @override
@@ -63,6 +72,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
     _scrollController.removeListener(_scrollListener);
     _scrollController.dispose();
     _searchController.dispose();
+    ThemeManager.removeListener(_onThemeChanged);
     super.dispose();
   }
   
@@ -81,7 +91,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
   }
   
   Future<void> _loadInitialData({bool isRefresh = false}) async {
-    setState(() {
+    _safeSetState(() {
       if (isRefresh) {
         _isReloading = true;
       } else {
@@ -112,8 +122,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
       );
       
       if (preloadedResult != null && !isRefresh) {
-        // 使用预加载数据
-        setState(() {
+        _safeSetState(() {
           _currentData = {
             'items': preloadedResult['items'],
             'current_page': preloadedResult['current_page'],
@@ -133,7 +142,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
         );
         
         if (result != null) {
-          setState(() {
+          _safeSetState(() {
             _currentData = {
               'items': result['items'],
               'current_page': result['current_page'],
@@ -143,7 +152,7 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
             };
           });
         } else {
-          setState(() {
+          _safeSetState(() {
             _errorMessage = '无法加载创意工坊数据';
           });
           return;
@@ -154,11 +163,11 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
       _smartPreload(_currentData['sort_by'], _currentData['current_page'], _currentData['total_pages']);
       
     } catch (e) {
-      setState(() {
+      _safeSetState(() {
         _errorMessage = '加载数据时出错: $e';
       });
     } finally {
-      setState(() {
+      _safeSetState(() {
         if (isRefresh) {
           _isReloading = false;
         } else {
@@ -192,8 +201,9 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
     
     try {
       final result = await _service.getWorkshopItems(_appId, sortBy, '', pageNum);
+      if (!mounted) return;
       if (result != null) {
-        setState(() {
+        _safeSetState(() {
           _additionalPreloadedData[sortBy]![pageNum] = result;
         });
         print('[SteamWorkshopPage] 预加载完成: $sortBy 第$pageNum页');
@@ -429,7 +439,6 @@ class SteamWorkshopPageState extends State<SteamWorkshopPage> {
   
   Widget _buildErrorMessage() {
     return Container(
-      color: ThemeManager.getThemeColor('surface'),
       width: double.infinity,
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(

@@ -10,7 +10,7 @@ import '../../theme_manager.dart';
 Future<void> showCollectionDetailsDialog(
   BuildContext context, 
   model.ModCollection collection,
-  List<ModInfo> allMods,
+  List<LocalModInfo> allMods,
 ) async {
   showDialog(
     context: context,
@@ -25,7 +25,7 @@ Future<void> showCollectionDetailsDialog(
 
 class CollectionDetailsDialog extends StatefulWidget {
   final model.ModCollection collection;
-  final List<ModInfo> allMods;
+  final List<LocalModInfo> allMods;
 
   const CollectionDetailsDialog({
     Key? key,
@@ -39,7 +39,7 @@ class CollectionDetailsDialog extends StatefulWidget {
 
 class CollectionDetailsDialogState extends State<CollectionDetailsDialog> {
   String _searchQuery = '';
-  List<ModInfo> _filteredMods = [];
+  List<LocalModInfo> _filteredMods = [];
 
   @override
   void initState() {
@@ -53,7 +53,7 @@ class CollectionDetailsDialogState extends State<CollectionDetailsDialog> {
             .where((mod) => mod.id == modId || mod.name == modId)
             .firstOrNull)
         .where((mod) => mod != null)
-        .cast<ModInfo>()
+        .cast<LocalModInfo>()
         .toList();
 
     if (_searchQuery.isEmpty) {
@@ -273,7 +273,7 @@ class CollectionDetailsDialogState extends State<CollectionDetailsDialog> {
     );
   }
 
-  Widget _buildModCard(ModInfo mod) {
+  Widget _buildModCard(LocalModInfo mod) {
     return Card(
       elevation: 2,
       child: Padding(

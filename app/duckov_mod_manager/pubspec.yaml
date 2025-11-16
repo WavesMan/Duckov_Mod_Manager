@@ -34,7 +34,9 @@ dependencies:
   path_provider: ^2.1.1
   path: ^1.9.0
   uuid: ^4.2.1
-  
+  web_socket_channel: ^2.4.0
+  sqflite_common_ffi: ^2.3.5
+
   # 添加主题管理依赖
   shared_preferences: ^2.2.2
 
@@ -44,6 +46,7 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
 
   flutter_lints: ^6.0.0
+  mockito: ^5.4.4
 
 flutter_launcher_icons:
   image_path: "lib/assets/icon.png"

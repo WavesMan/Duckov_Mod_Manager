@@ -356,11 +356,11 @@ class SettingPageState extends State<SettingPage> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.info_outline, color: ThemeManager.getThemeColor('primary'), size: 16),
+                      Icon(Icons.info_outline, color: ThemeManager.getThemeColor('text_primary'), size: 16),
                       const SizedBox(width: 8),
                       Text(
                         '路径选择说明',
-                        style: ThemeManager.headingTextStyle(level: 4, color: ThemeManager.getThemeColor('primary')),
+                        style: ThemeManager.headingTextStyle(level: 4, color: ThemeManager.getThemeColor('text_primary')),
                       ),
                     ],
                   ),
@@ -369,7 +369,7 @@ class SettingPageState extends State<SettingPage> {
                     '请选择包含"Escape from Duckov"游戏的目录。通常位于：\n'
                     '• Steam版本: E:\\SteamLibrary\\steamapps\\common\\Escape from Duckov\n'
                     '• 本地版本: 游戏安装目录文件夹',
-                    style: ThemeManager.bodyTextStyle(size: 10),
+                    style: ThemeManager.bodyTextStyle(size: 10, color: ThemeManager.getThemeColor('text_primary')),
                   ),
                 ],
               ),

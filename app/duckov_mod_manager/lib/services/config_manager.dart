@@ -43,6 +43,7 @@ class ConfigManager {
   /// 从配置文件加载配置
   Future<void> _loadConfig() async {
     try {
+      final oldConfigSnapshot = Map<String, dynamic>.from(_config);
       final file = File(configFile);
       if (await file.exists()) {
         final contents = await file.readAsString();
@@ -66,6 +67,13 @@ class ConfigManager {
           }
         }
         print("=== 配置加载完成 ===\n");
+        for (final key in _config.keys) {
+          final oldVal = oldConfigSnapshot[key];
+          final newVal = _config[key];
+          if (oldVal != newVal) {
+            _notifyListeners(key, newVal);
+          }
+        }
       } else {
         // 如果配置文件不存在，保存默认配置
         await _saveConfig();

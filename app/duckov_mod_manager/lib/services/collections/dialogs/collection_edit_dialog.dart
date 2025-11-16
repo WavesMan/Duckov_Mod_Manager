@@ -7,7 +7,7 @@ import 'package:duckov_mod_manager/services/theme_manager.dart';
 /// 合集编辑对话框组件
 class CollectionEditDialog extends StatefulWidget {
   final ModCollection? collection; // 编辑时传入，创建时为null
-  final List<ModInfo>? availableMods;  // 可选的模组列表
+  final List<LocalModInfo>? availableMods;  // 可选的模组列表
 
   const CollectionEditDialog({
     super.key,
@@ -27,7 +27,7 @@ class _CollectionEditDialogState extends State<CollectionEditDialog> {
   late Set<String> _selectedModIds;
   bool _isSaving = false;
   String _modSearchQuery = '';
-  List<ModInfo> _filteredMods = [];
+  List<LocalModInfo> _filteredMods = [];
 
   @override
   void initState() {
@@ -360,7 +360,7 @@ class _CollectionEditDialogState extends State<CollectionEditDialog> {
   }
 
   // 构建模组卡片
-  Widget _buildModCard(ModInfo mod, bool isSelected) {
+  Widget _buildModCard(LocalModInfo mod, bool isSelected) {
     return Card(
       elevation: 3,
       color: isSelected ? Colors.blue.withAlpha(25) : Colors.white, // 0.1 opacity = 25/255 alpha
@@ -445,7 +445,7 @@ class _CollectionEditDialogState extends State<CollectionEditDialog> {
   }
 
   // 构建模组预览图片
-  Widget _buildModPreview(ModInfo mod) {
+  Widget _buildModPreview(LocalModInfo mod) {
     if (mod.previewImagePath != null) {
       try {
         return Image.file(
@@ -495,7 +495,7 @@ class _CollectionEditDialogState extends State<CollectionEditDialog> {
 /// 显示合集编辑对话框的便捷方法
 Future<ModCollection?> showCollectionEditDialog(
   BuildContext context,
-  List<ModInfo> availableMods,
+  List<LocalModInfo> availableMods,
   {ModCollection? collection}
 ) async {
   return await showDialog<ModCollection?>(

@@ -29,8 +29,19 @@ class ThemeManager {
   /// 新增：设置主题模式（调用方可在设置页/启动处使用）
   static void setThemeMode(AppThemeMode mode) {
     _currentMode = mode;
-    // 注意：这里不做任何 rebuild 通知，保持旧类的"纯静态"特性。
-    // UI 需要刷新时，由外部状态管理触发 setState / Provider 等。
+    for (final l in _listeners.toList()) {
+      try {
+        l();
+      } catch (_) {}
+    }
+  }
+
+  static final Set<VoidCallback> _listeners = <VoidCallback>{};
+  static void addListener(VoidCallback listener) {
+    _listeners.add(listener);
+  }
+  static void removeListener(VoidCallback listener) {
+    _listeners.remove(listener);
   }
 
   /// 内部：根据 _currentMode 和系统亮度得到最终模式

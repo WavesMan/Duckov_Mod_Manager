@@ -9,6 +9,7 @@ import 'package:duckov_mod_manager/services/collections/dialogs/exclusive_confli
 import 'package:duckov_mod_manager/services/collections/dialogs/collection_details_dialog.dart';
 import '../services/mod_manager.dart';
 import '../services/theme_manager.dart';
+import '../services/route_service.dart';
 
 class ModCollectionsPage extends StatefulWidget {
   const ModCollectionsPage({Key? key}) : super(key: key);
@@ -20,6 +21,24 @@ class ModCollectionsPage extends StatefulWidget {
 class ModCollectionsPageState extends State<ModCollectionsPage> {
   String _searchQuery = '';
   String? _searchError;
+  void _onThemeChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+  bool _progressShowing = false;
+  OverlayEntry? _progressOverlayEntry;
+
+  @override
+  void initState() {
+    super.initState();
+    ThemeManager.addListener(_onThemeChanged);
+  }
+
+  @override
+  void dispose() {
+    ThemeManager.removeListener(_onThemeChanged);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -416,12 +435,14 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
 
   Future<void> _createNewCollection() async {
     try {
-      final mods = await modManager.getDownloadedMods();
+      final wsMods = await modManager.getDownloadedMods();
+      final localMods = await modManager.getLocalMods();
+      final mods = [...wsMods, ...localMods];
       
       if (mods.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('没有已下载的模组，请先下载模组')),
+            SnackBar(content: Text('没有可用模组，请先安装或下载模组')),
           );
         }
         return;
@@ -447,7 +468,9 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
 
   Future<void> _editCollection(model.ModCollection collection) async {
     try {
-      final mods = await modManager.getDownloadedMods();
+      final wsMods = await modManager.getDownloadedMods();
+      final localMods = await modManager.getLocalMods();
+      final mods = [...wsMods, ...localMods];
       
       final updatedCollection = await showCollectionEditDialog(context, mods, collection: collection);
       if (updatedCollection != null) {
@@ -469,8 +492,9 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
 
   Future<void> _viewCollectionDetails(model.ModCollection collection) async {
     try {
-      // 获取所有模组信息
-      final allMods = await modManager.getDownloadedMods();
+      final wsMods = await modManager.getDownloadedMods();
+      final localMods = await modManager.getLocalMods();
+      final allMods = [...wsMods, ...localMods];
       
       // 显示新的详情对话框
       await showCollectionDetailsDialog(context, collection, allMods);
@@ -497,14 +521,21 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
         );
         
         if (confirmed) {
+          _showProgress();
           try {
+            print('[ModCollectionsPage] enableCollection start: '+collection.id);
             await collectionService.enableCollection(collection);
+            print('[ModCollectionsPage] enableCollection done: '+collection.id);
+            _hideProgress();
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('合集启用成功')),
               );
             }
+            try { RouteService.instance.goTo(AppRoutes.modCollections); } catch (_) {}
           } catch (e) {
+            print('[ModCollectionsPage] enableCollection error: '+e.toString());
+            _hideProgress();
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('启用合集失败: $e')),
@@ -538,14 +569,21 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
     );
     
     if (confirmed == true) {
+      _showProgress();
       try {
+        print('[ModCollectionsPage] enableCollection start: '+collection.id);
         await collectionService.enableCollection(collection);
+        print('[ModCollectionsPage] enableCollection done: '+collection.id);
+        _hideProgress();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('合集启用成功')),
           );
         }
+        try { RouteService.instance.goTo(AppRoutes.modCollections); } catch (_) {}
       } catch (e) {
+        print('[ModCollectionsPage] enableCollection error: '+e.toString());
+        _hideProgress();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('启用合集失败: $e')),
@@ -577,14 +615,21 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
     );
     
     if (confirmed == true) {
+      _showProgress();
       try {
+        print('[ModCollectionsPage] disableCollection start: '+collection.id);
         await collectionService.disableCollection(collection);
+        print('[ModCollectionsPage] disableCollection done: '+collection.id);
+        _hideProgress();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('合集禁用成功')),
           );
         }
+        try { RouteService.instance.goTo(AppRoutes.modCollections); } catch (_) {}
       } catch (e) {
+        print('[ModCollectionsPage] disableCollection error: '+e.toString());
+        _hideProgress();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('禁用合集失败: $e')),
@@ -593,6 +638,40 @@ class ModCollectionsPageState extends State<ModCollectionsPage> {
       }
     }
   }
+
+  void _showProgress() {
+    if (_progressShowing) return;
+    final overlay = Overlay.of(context, rootOverlay: true);
+    if (overlay == null) {
+      print('[ModCollectionsPage] overlay not available');
+      return;
+    }
+    print('[ModCollectionsPage] show progress');
+    _progressShowing = true;
+    _progressOverlayEntry = OverlayEntry(
+      builder: (_) => Stack(
+        children: const [
+          ModalBarrier(dismissible: false, color: Colors.black26),
+          Center(child: CircularProgressIndicator()),
+        ],
+      ),
+    );
+    overlay.insert(_progressOverlayEntry!);
+  }
+
+  void _hideProgress() {
+    if (!_progressShowing) return;
+    try {
+      _progressOverlayEntry?.remove();
+      _progressOverlayEntry = null;
+      print('[ModCollectionsPage] hide progress');
+    } catch (e) {
+      print('[ModCollectionsPage] hide progress error: '+e.toString());
+    } finally {
+      _progressShowing = false;
+    }
+  }
+
 
   Future<void> _deleteCollection(model.ModCollection collection) async {
     final confirmed = await showDialog<bool>(

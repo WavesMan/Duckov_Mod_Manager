@@ -17,6 +17,10 @@ class _HomePageState extends State<HomePage> {
   String _statusText = "";
   bool _isGameRunning = false;
   Timer? _periodicTimer;
+  void _onThemeChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
 
   @override
   void initState() {
@@ -26,11 +30,13 @@ class _HomePageState extends State<HomePage> {
     _periodicTimer = Timer.periodic(Duration(seconds: 2), (timer) {
       _updateGameStatus();
     });
+    ThemeManager.addListener(_onThemeChanged);
   }
 
   @override
   void dispose() {
     _periodicTimer?.cancel();
+    ThemeManager.removeListener(_onThemeChanged);
     super.dispose();
   }
 

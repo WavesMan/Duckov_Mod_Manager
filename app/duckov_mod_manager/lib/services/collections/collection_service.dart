@@ -129,8 +129,12 @@ class CollectionService {
   /// 获取合集中已安装的模组数量
   Future<int> getInstalledModCount(ModCollection collection) async {
     try {
-      final allMods = await modManager.getDownloadedMods();
-      final modIds = allMods.map((m) => m.id).toSet();
+      final wsMods = await modManager.getDownloadedMods();
+      final localMods = await modManager.getLocalMods();
+      final modIds = {
+        ...wsMods.map((m) => m.id),
+        ...localMods.map((m) => m.id),
+      };
       return collection.modIds.where((id) => modIds.contains(id)).length;
     } catch (e) {
       return 0;

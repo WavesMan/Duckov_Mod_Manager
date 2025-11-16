@@ -2,6 +2,7 @@
 /// 路由服务 - 定义应用路由和导航项
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 class AppRoutes {
   static const String home = '/home';
@@ -31,3 +32,25 @@ final List<NavigationItem> navigationItems = [
   NavigationItem(title: '创意工坊', icon: Icons.workspaces, route: AppRoutes.steamWorkshop),
   NavigationItem(title: '设置', icon: Icons.settings, route: AppRoutes.settings),
 ];
+
+class RouteService {
+  static final RouteService instance = RouteService._();
+  RouteService._();
+
+  final ValueNotifier<String> _currentRoute = ValueNotifier<String>(AppRoutes.home);
+  ValueListenable<String> get currentRoute => _currentRoute;
+
+  void goTo(String route) {
+    _currentRoute.value = route;
+  }
+
+  void goToIndex(int index) {
+    if (index < 0 || index >= navigationItems.length) return;
+    _currentRoute.value = navigationItems[index].route;
+  }
+
+  int routeToIndex(String route) {
+    final idx = navigationItems.indexWhere((e) => e.route == route);
+    return idx >= 0 ? idx : 0;
+  }
+}

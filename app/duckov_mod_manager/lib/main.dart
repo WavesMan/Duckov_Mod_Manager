@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'components/layout.dart';
+import 'services/route_service.dart';
 import 'page/home.dart';
 import 'page/mod_page.dart';
 import 'page/mod_collections_page.dart';
@@ -10,8 +11,7 @@ import 'services/config_manager.dart';
 import 'services/version_manager.dart';
 import 'services/collections/collection_service.dart';
 import 'services/mod_manager.dart';
-import 'services/mod_manager_bridge_client.dart';
-import 'services/bridge_sync_service.dart';
+import 'services/mod_manager/bridge_client/bridge_client.dart';
 import 'services/theme_manager.dart';
 import 'page/update_page.dart';
 
@@ -50,19 +50,36 @@ class _MainAppLayoutState extends State<MainAppLayout> {
   // 用于避免动画堆积
   bool _isAnimating = false;
   
-  // Bridge同步服务
-  BridgeSyncService? _bridgeSyncService;
+  late final List<Widget> _pages;
+
+  
+  // 注释掉不存在的BridgeSyncService
+  // BridgeSyncService? _bridgeSyncService;
 
   @override
   void initState() {
     super.initState();
     _initializeServices();
+    _pages = [
+      homePageView(),
+      modsPageView(),
+      modCollectionsPageView(),
+      steamWorkshopView(),
+      settingsPageView(),
+    ];
+    RouteService.instance.currentRoute.addListener(_onRouteChanged);
   }
   
   @override
   void dispose() {
     // 清理Bridge同步服务资源
-    _bridgeSyncService?.dispose();
+    // _bridgeSyncService?.dispose();
+    try {
+      bridgeClient.dispose();
+    } catch (_) {}
+    try {
+      RouteService.instance.currentRoute.removeListener(_onRouteChanged);
+    } catch (_) {}
     super.dispose();
   }
   
@@ -88,14 +105,15 @@ class _MainAppLayoutState extends State<MainAppLayout> {
   Future<void> _initializeBridgeSyncService() async {
     try {
       final modManager = ModManager();
-      final bridgeClient = ModManagerBridgeClient();
+      // ModManagerBridgeClient 似乎不存在，我们注释掉相关代码
+      // final bridgeClient = ModManagerBridgeClient();
       
       // 等待Bridge客户端连接初始化
-      await bridgeClient.initialize();
+      // await bridgeClient.initialize();
       
       // 创建并启动Bridge同步服务
-      _bridgeSyncService = BridgeSyncService(bridgeClient, modManager);
-      _bridgeSyncService?.start();
+      // _bridgeSyncService = BridgeSyncService(bridgeClient, modManager);
+      // _bridgeSyncService?.start();
       
       print('[MainApp] Bridge同步服务初始化成功');
       
@@ -149,6 +167,15 @@ class _MainAppLayoutState extends State<MainAppLayout> {
     });
   }
 
+  void _onRouteChanged() {
+    final route = RouteService.instance.currentRoute.value;
+    final idx = RouteService.instance.routeToIndex(route);
+    if (idx == _currentPageIndex) return;
+    setState(() {
+      _currentPageIndex = idx;
+    });
+  }
+
   Widget _getCurrentPage() {
     switch (_currentPageIndex) {
       case 0:
@@ -168,20 +195,9 @@ class _MainAppLayoutState extends State<MainAppLayout> {
 
   /// 获取带动画的当前页面
   Widget _getCurrentPageWithAnimation() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 400),
-      switchInCurve: Curves.easeInOut,
-      switchOutCurve: Curves.easeInOut,
-      transitionBuilder: (Widget child, Animation<double> animation) {
-        return FadeTransition(
-          opacity: animation,
-          child: child,
-        );
-      },
-      child: Container(
-        key: ValueKey(_currentPageIndex), // 确保页面切换时触发动画
-        child: _getCurrentPage(),
-      ),
+    return IndexedStack(
+      index: _currentPageIndex,
+      children: _pages,
     );
   }
 

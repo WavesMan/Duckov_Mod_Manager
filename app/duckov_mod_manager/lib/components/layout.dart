@@ -23,6 +23,22 @@ class AppLayout extends StatefulWidget {
 
 class _AppLayoutState extends State<AppLayout> {
   bool _sidebarExpanded = true;
+  void _onThemeChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    ThemeManager.addListener(_onThemeChanged);
+  }
+
+  @override
+  void dispose() {
+    ThemeManager.removeListener(_onThemeChanged);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
