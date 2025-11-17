@@ -21,7 +21,7 @@ class BridgeClient {
   Completer<void>? _sendDone;
 
   BridgeClient({
-    this.host = 'localhost',
+    this.host = '127.0.0.1',
     this.port = 9001,
     this.connectTimeout = const Duration(seconds: 10),
     this.requestTimeout = const Duration(seconds: 30),
@@ -29,7 +29,7 @@ class BridgeClient {
 
   BridgeStatus get status => _status;
   bool get isConnected => _status == BridgeStatus.connected;
-  Uri get uri => Uri.parse('ws://$host:$port');
+  Uri get uri => Uri.parse('ws://$host:$port/');
 
   Future<bool> connect() async {
     if (_connecting || isConnected) return isConnected;
@@ -39,6 +39,9 @@ class BridgeClient {
     try {
       final ws = await WebSocket.connect(
         uri.toString(),
+        headers: {
+          'Origin': 'http://localhost',
+        },
         compression: const CompressionOptions(enabled: false),
       );
       ws.pingInterval = null;
@@ -107,10 +110,13 @@ class BridgeClient {
     print('[bridge_client] -> '+jsonStr);
     try {
       _channel!.sink.add(jsonStr);
-      final raw = await _incoming!.stream.first.timeout(requestTimeout);
-      final text = raw is String ? raw : utf8.decode(raw as List<int>);
-      print('[bridge_client] <- '+text);
-      final parsed = jsonDecode(text) as Map<String, dynamic>;
+      final parsed = await _incoming!.stream
+          .map(_tryParseToMap)
+          .where((m) => m != null && m!.containsKey('success'))
+          .map((m) => m!)
+          .first
+          .timeout(requestTimeout);
+      print('[bridge_client] <- '+jsonEncode(parsed));
       return parsed;
     } catch (e) {
       print('[bridge_client] request error: '+e.toString());
@@ -127,6 +133,15 @@ class BridgeClient {
     if (data == null) return '';
     if (data is String) return data;
     return jsonEncode(data);
+  }
+
+  Map<String, dynamic>? _tryParseToMap(dynamic raw) {
+    try {
+      final text = raw is String ? raw : utf8.decode(raw as List<int>);
+      final obj = jsonDecode(text);
+      if (obj is Map<String, dynamic>) return obj;
+    } catch (_) {}
+    return null;
   }
 
   Future<List<Map<String, dynamic>>> getModList() async {
@@ -164,6 +179,21 @@ class BridgeClient {
 
   Future<bool> rescanMods() async {
     final resp = await _send('rescan_mods', '');
+    return resp != null && resp['success'] == true;
+  }
+
+  Future<bool> setPriority(String modName, int priority) async {
+    final resp = await _send('set_priority', jsonEncode({'name': modName, 'priority': priority}));
+    return resp != null && resp['success'] == true;
+  }
+
+  Future<bool> reorderMods(List<String> orderNames) async {
+    final resp = await _send('reorder_mods', jsonEncode(orderNames));
+    return resp != null && resp['success'] == true;
+  }
+
+  Future<bool> applyOrderAndRescan(List<String> orderNames) async {
+    final resp = await _send('apply_order_and_rescan', jsonEncode(orderNames));
     return resp != null && resp['success'] == true;
   }
 

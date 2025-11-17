@@ -11,6 +11,7 @@ import websockets
 import json
 import sys
 import argparse
+import time
 
 
 class ModManagerClient:
@@ -41,8 +42,7 @@ class ModManagerClient:
             await self.websocket.close()
             print("连接已断开")
 
-    async def send_request(self, action, data=None):
-        """发送请求到服务器"""
+    async def send_request(self, action, data=None, max_retries=5, retry_delay=1.0):
         if not self.websocket:
             print("未连接到服务器")
             return None
@@ -52,13 +52,22 @@ class ModManagerClient:
             "data": data if data is not None else ""
         }
 
-        try:
-            await self.websocket.send(json.dumps(request))
-            response = await self.websocket.recv()
-            return json.loads(response)
-        except Exception as e:
-            print(f"发送请求时出错: {e}")
-            return None
+        attempt = 0
+        while attempt < max_retries:
+            try:
+                await self.websocket.send(json.dumps(request))
+                response = await self.websocket.recv()
+                parsed = json.loads(response)
+                msg = parsed.get("message", "")
+                if (not parsed.get("success")) and isinstance(msg, str) and msg.startswith("rate_limit_exceeded"):
+                    attempt += 1
+                    await asyncio.sleep(retry_delay)
+                    continue
+                return parsed
+            except Exception as e:
+                print(f"发送请求时出错: {e}")
+                return None
+        return {"success": False, "message": "rate_limit_exceeded: retries_exhausted"}
 
     async def get_mod_list(self):
         """获取mod列表"""
@@ -85,23 +94,50 @@ class ModManagerClient:
         else:
             print(f"获取mod列表失败: {response.get('message') if response else '未知错误'}")
 
+    async def _fetch_mods(self):
+        resp = await self.send_request("get_mod_list")
+        if not resp or not resp.get("success"):
+            return []
+        data = resp.get("data", "[]")
+        try:
+            return json.loads(data)
+        except Exception:
+            return []
+
+    async def is_mod_active(self, mod_name):
+        mods = await self._fetch_mods()
+        for m in mods:
+            if m.get("name") == mod_name:
+                return bool(m.get("isActive"))
+        return None
+
     async def activate_mod(self, mod_name):
         """激活指定mod"""
         print(f"正在激活mod: {mod_name}")
+        status = await self.is_mod_active(mod_name)
+        if status is True:
+            print(f"已激活，跳过: {mod_name}")
+            return
         # 使用json.dumps确保mod名称被引号包裹
         response = await self.send_request("activate_mod", json.dumps(mod_name))
         if response and response.get("success"):
-            print(f"Mod '{mod_name}' 激活成功")
+            msg = response.get("message") or "激活成功"
+            print(f"{msg}: {mod_name}")
         else:
             print(f"激活mod失败: {response.get('message') if response else '未知错误'}")
 
     async def deactivate_mod(self, mod_name):
         """停用指定mod"""
         print(f"正在停用mod: {mod_name}")
+        status = await self.is_mod_active(mod_name)
+        if status is False:
+            print(f"已停用，跳过: {mod_name}")
+            return
         # 使用json.dumps确保mod名称被引号包裹
         response = await self.send_request("deactivate_mod", json.dumps(mod_name))
         if response and response.get("success"):
-            print(f"Mod '{mod_name}' 停用成功")
+            msg = response.get("message") or "停用成功"
+            print(f"{msg}: {mod_name}")
         else:
             print(f"停用mod失败: {response.get('message') if response else '未知错误'}")
 
@@ -124,6 +160,24 @@ class ModManagerClient:
             print(f"批量停用成功: {response.get('message')}")
         else:
             print(f"批量停用失败: {response.get('message') if response else '未知错误'}")
+
+    async def benchmark_activate(self, count, prefix):
+        names = [f"{prefix}_{i}" for i in range(count)]
+        print(f"基准测试: 批量激活 {count} 个条目, 前缀 {prefix}")
+        start = time.perf_counter()
+        response = await self.send_request("activate_mods", json.dumps(names))
+        elapsed = time.perf_counter() - start
+        ok = response and response.get("success")
+        print(f"结果: {'成功' if ok else '失败'}, 用时: {elapsed:.2f}s, 吞吐: {count/elapsed if elapsed>0 else 0:.1f}/s")
+
+    async def benchmark_deactivate(self, count, prefix):
+        names = [f"{prefix}_{i}" for i in range(count)]
+        print(f"基准测试: 批量停用 {count} 个条目, 前缀 {prefix}")
+        start = time.perf_counter()
+        response = await self.send_request("deactivate_mods", json.dumps(names))
+        elapsed = time.perf_counter() - start
+        ok = response and response.get("success")
+        print(f"结果: {'成功' if ok else '失败'}, 用时: {elapsed:.2f}s, 吞吐: {count/elapsed if elapsed>0 else 0:.1f}/s")
 
     async def rescan_mods(self):
         """重新扫描mods"""
@@ -167,20 +221,34 @@ async def interactive_mode(client):
                 await client.rescan_mods()
             elif command in ['help', 'h', '?', '5']:
                 show_help()
-            elif command in ['batch_activate']:
+            elif command in ['batch_activate', '7']:
                 mod_names_input = input("请输入要激活的mod名称列表(用逗号分隔): ").strip()
                 if mod_names_input:
                     mod_names = [name.strip() for name in mod_names_input.split(",")]
                     await client.activate_mods(mod_names)
                 else:
                     print("错误: mod名称列表不能为空")
-            elif command in ['batch_deactivate']:
+            elif command in ['batch_deactivate', '8']:
                 mod_names_input = input("请输入要停用的mod名称列表(用逗号分隔): ").strip()
                 if mod_names_input:
                     mod_names = [name.strip() for name in mod_names_input.split(",")]
                     await client.deactivate_mods(mod_names)
                 else:
                     print("错误: mod名称列表不能为空")
+            elif command in ['batch_test_activate', '9']:
+                try:
+                    count = int(input("请输入批量激活条目数量(默认120): ") or 120)
+                except ValueError:
+                    count = 120
+                prefix = input("请输入名称前缀(默认DummyMod): ") or "DummyMod"
+                await client.benchmark_activate(count, prefix)
+            elif command in ['batch_test_deactivate', '10']:
+                try:
+                    count = int(input("请输入批量停用条目数量(默认120): ") or 120)
+                except ValueError:
+                    count = 120
+                prefix = input("请输入名称前缀(默认DummyMod): ") or "DummyMod"
+                await client.benchmark_deactivate(count, prefix)
             else:
                 print(f"未知命令: {command}. 输入 'help' 或 '5' 查看可用命令.")
         except KeyboardInterrupt:
@@ -202,14 +270,16 @@ async def interactive_mode(client):
 def show_help():
     """显示帮助信息"""
     print("可用命令:")
-    print("  1. list             - 获取mod列表")
-    print("  2. activate         - 激活指定mod")
-    print("  3. deactivate       - 停用指定mod")
-    print("  4. rescan           - 重新扫描mods")
-    print("  5. help             - 显示帮助信息")
-    print("  6. quit/exit        - 退出程序")
-    print("  batch_activate      - 批量激活mods")
-    print("  batch_deactivate    - 批量停用mods")
+    print("  1. list                 - 获取mod列表")
+    print("  2. activate             - 激活指定mod")
+    print("  3. deactivate           - 停用指定mod")
+    print("  4. rescan               - 重新扫描mods")
+    print("  5. help                 - 显示帮助信息")
+    print("  6. quit/exit            - 退出程序")
+    print("  7. batch_activate       - 批量激活mods")
+    print("  8. batch_deactivate     - 批量停用mods")
+    print("  9. batch_test_activate  - 批量激活基准测试")
+    print(" 10. batch_test_deactivate- 批量停用基准测试")
 
 
 async def main():
@@ -243,6 +313,13 @@ async def main():
     
     # 交互模式命令
     subparsers.add_parser("interactive", help="进入交互模式")
+
+    bench_activate_parser = subparsers.add_parser("batch_test_activate", help="批量激活基准测试")
+    bench_activate_parser.add_argument("--count", type=int, default=120, help="条目数量")
+    bench_activate_parser.add_argument("--prefix", default="DummyMod", help="名称前缀")
+    bench_deactivate_parser = subparsers.add_parser("batch_test_deactivate", help="批量停用基准测试")
+    bench_deactivate_parser.add_argument("--count", type=int, default=120, help="条目数量")
+    bench_deactivate_parser.add_argument("--prefix", default="DummyMod", help="名称前缀")
     
     args = parser.parse_args()
     
@@ -267,6 +344,10 @@ async def main():
             await client.rescan_mods()
         elif args.command == "interactive":
             await interactive_mode(client)
+        elif args.command == "batch_test_activate":
+            await client.benchmark_activate(args.count, args.prefix)
+        elif args.command == "batch_test_deactivate":
+            await client.benchmark_deactivate(args.count, args.prefix)
         elif args.command is None:
             # 如果没有指定命令，则进入交互模式
             await interactive_mode(client)

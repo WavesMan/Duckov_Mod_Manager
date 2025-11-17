@@ -13,6 +13,7 @@ namespace ModManagerBridge.WebSocket
         private TcpListener tcpListener;
         private Thread listenerThread;
         private List<WebSocketConnection> connections = new List<WebSocketConnection>();
+        private readonly object connectionsLock = new object();
         private bool isServerRunning = false;
         private readonly int port;
         private ModManagerBridgeCore modCore;
@@ -59,7 +60,10 @@ namespace ModManagerBridge.WebSocket
                     TcpClient client = tcpListener.AcceptTcpClient();
                     var remote = client?.Client?.RemoteEndPoint?.ToString() ?? "未知地址";
                     WebSocketConnection connection = new WebSocketConnection(client, modCore);
-                    connections.Add(connection);
+                    lock (connectionsLock)
+                    {
+                        connections.Add(connection);
+                    }
                     
                     Thread clientThread = new Thread(connection.HandleClient);
                     clientThread.IsBackground = true;
@@ -89,13 +93,46 @@ namespace ModManagerBridge.WebSocket
             
             // 关闭所有连接
             Debug.Log($"WebSocket服务器停止中，关闭连接数: {connections.Count}");
-            foreach (var connection in connections)
+            lock (connectionsLock)
             {
-                connection.Close();
+                foreach (var connection in connections)
+                {
+                    connection.Close();
+                }
+                connections.Clear();
             }
-            
-            connections.Clear();
             Debug.Log("WebSocket服务器已停止");
+        }
+
+        public void Broadcast(string message)
+        {
+            List<WebSocketConnection> snapshot;
+            lock (connectionsLock)
+            {
+                snapshot = new List<WebSocketConnection>(connections);
+            }
+            var toRemove = new List<WebSocketConnection>();
+            foreach (var c in snapshot)
+            {
+                try
+                {
+                    c.Send(message);
+                }
+                catch
+                {
+                    toRemove.Add(c);
+                }
+            }
+            if (toRemove.Count > 0)
+            {
+                lock (connectionsLock)
+                {
+                    foreach (var c in toRemove)
+                    {
+                        connections.Remove(c);
+                    }
+                }
+            }
         }
     }
 }

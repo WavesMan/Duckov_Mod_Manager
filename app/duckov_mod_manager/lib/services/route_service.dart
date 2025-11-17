@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 class AppRoutes {
   static const String home = '/home';
   static const String mods = '/mods';
+  static const String modOrder = '/mod-order';
   static const String modCollections = '/mod-collections';
   static const String steamWorkshop = '/steam-workshop';
   static const String settings = '/settings';
@@ -28,7 +29,8 @@ class NavigationItem {
 final List<NavigationItem> navigationItems = [
   NavigationItem(title: '主页', icon: Icons.home, route: AppRoutes.home),
   NavigationItem(title: '模组管理', icon: Icons.apps, route: AppRoutes.mods),
-  NavigationItem(title: 'Mod合集 BETA', icon: Icons.collections, route: AppRoutes.modCollections),
+  NavigationItem(title: '加载顺序', icon: Icons.format_list_numbered, route: AppRoutes.modOrder),
+  // NavigationItem(title: 'Mod合集 BETA', icon: Icons.collections, route: AppRoutes.modCollections),
   NavigationItem(title: '创意工坊', icon: Icons.workspaces, route: AppRoutes.steamWorkshop),
   NavigationItem(title: '设置', icon: Icons.settings, route: AppRoutes.settings),
 ];

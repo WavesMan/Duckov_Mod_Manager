@@ -10,6 +10,7 @@ class WsClientService {
 
   final BridgeClient _client = bridgeClient;
   final ChangeQueue _queue = ChangeQueue();
+  final Set<String> _reservedNames = {'ModManagerBridge','DuckovModManager'};
   final StreamController<String> _status = StreamController<String>.broadcast();
   bool _running = false;
   bool _connecting = false;
@@ -78,11 +79,15 @@ class WsClientService {
       final enableNames = <String>[];
       final disableNames = <String>[];
       for (final m in localMods) {
+        final name = m.name;
+        if (_reservedNames.contains(name)) {
+          continue;
+        }
         final e = await modManager.isModEnabled(m.id);
         if (e) {
-          enableNames.add(m.name);
+          enableNames.add(name);
         } else {
-          disableNames.add(m.name);
+          disableNames.add(name);
         }
       }
       if (enableNames.isNotEmpty) {
@@ -112,8 +117,8 @@ class WsClientService {
     if (!_client.isConnected) return;
     final idMap = await _buildIdNameMap();
     final batch = _queue.take(10);
-    final enableNames = batch.enable.map((id) => idMap[id] ?? id).toList();
-    final disableNames = batch.disable.map((id) => idMap[id] ?? id).toList();
+    final enableNames = batch.enable.map((id) => idMap[id] ?? id).where((n) => !_reservedNames.contains(n)).toList();
+    final disableNames = batch.disable.map((id) => idMap[id] ?? id).where((n) => !_reservedNames.contains(n)).toList();
     if (enableNames.isNotEmpty) {
       final ok = await _client.activateMods(enableNames);
       Log.info('WsClientService', 'flush enable', metadata: {'count': enableNames.length, 'success': ok});

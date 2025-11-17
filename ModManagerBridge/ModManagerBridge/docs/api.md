@@ -140,7 +140,7 @@
 
 ### 批量激活模组
 
-按名称批量激活模组（最多10个）。
+按名称批量激活模组（不限制数量）。
 
 **操作**: `activate_mods`
 
@@ -166,7 +166,7 @@
 
 ### 批量停用模组
 
-按名称批量停用模组（最多10个）。
+按名称批量停用模组（不限制数量）。
 
 **操作**: `deactivate_mods`
 
@@ -216,6 +216,115 @@
 }
 ```
 
+### 设置单个模组优先级
+
+设置指定模组的加载优先级，并立即重新扫描。
+
+**操作**: `set_priority`
+
+**数据**: 形如 `"ModName:Priority"` 的字符串（例如：`"ExampleMod:3"`）
+
+**响应数据**: 无
+
+**请求示例**:
+```json
+{
+  "action": "set_priority",
+  "data": "ExampleMod:3"
+}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "优先级已设置并重新扫描"
+}
+```
+
+### 批量重排模组顺序
+
+按提供的名称数组设置整体优先级顺序（数组索引为优先级），完成后重新扫描。
+
+**操作**: `reorder_mods`
+
+**数据**: 模组名称数组的 JSON 字符串（按期望顺序排列）
+
+**响应数据**: 无
+
+**请求示例**:
+```json
+{
+  "action": "reorder_mods",
+  "data": "[\"CoreTweaks\", \"ExampleMod\", \"UIFix\"]"
+}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "success: 3/3. true: 'CoreTweaks','ExampleMod','UIFix'."
+}
+```
+
+### 应用顺序并重新扫描与激活
+
+一次性应用整体顺序，重新扫描，并在允许激活的前提下触发统一激活以保证运行期与持久化顺序一致。
+
+**操作**: `apply_order_and_rescan`
+
+**数据**: 模组名称数组的 JSON 字符串（按期望顺序排列）
+
+**响应数据**: 无
+
+**请求示例**:
+```json
+{
+  "action": "apply_order_and_rescan",
+  "data": "[\"CoreTweaks\", \"ExampleMod\", \"UIFix\"]"
+}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "applied: 3/3. true: 'CoreTweaks','ExampleMod','UIFix'."
+}
+```
+
+### 顺序与激活要求
+
+- 激活顺序：严格由 `ActivateMod` 的调用顺序决定，覆盖型行为遵循“后写覆盖先写”。
+- 重新排序不重激活：单纯修改优先级不会对已激活 MOD 进行重启；`apply_order_and_rescan` 仅激活尚未激活的 MOD。
+- 推荐流程：
+  - 受顺序影响的 MOD：先批量停用 → 设置优先级 → 通过 `apply_order_and_rescan` 统一激活
+  - 或按新顺序逐一调用 `activate_mod`，确保调用顺序即激活顺序
+- 全量确定性：`reorder_mods` 只重排传入的名称；未列出的 MOD 保留旧优先级。若需全量确定性顺序，请传入“所有 MOD 名称”的完整数组。
+
+### 事件推送协议
+
+服务端在连接存活期间会主动推送变更事件，以降低客户端轮询成本。事件统一采用如下格式：
+
+```json
+{"type":"<事件类型>","data":{...}}
+```
+
+可用事件：
+- `scan`：重新扫描完成
+  - `data.mods`：数组，元素包含 `name`、`priority`
+- `reorder`：顺序发生变更
+  - `data.names`：按当前顺序排列的名称数组
+  - `data.priorities`：名称到优先级的映射对象
+- `mod_activated`：某模组被激活
+  - `data.name`：模组名称
+- `mod_deactivated`：某模组被停用
+  - `data.name`：模组名称
+- `status_changed`：激活状态发生变化（摘要）
+  - `data.active`：当前激活中的模组数量
+
+客户端在接收消息时，应区分“响应对象”（包含 `success` 字段）与“事件对象”（包含 `type` 字段）。
 ## 错误响应
 
 所有端点都可以返回以下格式的错误响应：
@@ -231,4 +340,18 @@
 - "未知操作: [action_name]" - 提供了无效操作时
 - "未找到mod: [mod_name]" - 尝试激活/停用不存在的模组时
 - "无法激活mod" - 模组激活失败时
-- "一次最多只能激活/停用10个mods" - 超过批量操作限制时
+- "优先级解析失败" - `set_priority` 的数据格式不正确时
+
+## 速率限制说明
+
+- 限制维度：
+  - 每连接 `requests_per_second`（请求速率）
+  - 批量项 `items_per_second`（批量处理节流）
+- 默认阈值：
+  - `requests_per_second` = 20
+  - `items_per_second` = 50
+- 超限行为：
+  - 请求速率超限：立即返回错误
+    - 示例：`{"success":false,"message":"rate_limit_exceeded: requests_per_second"}`
+  - 批量项超出节流阈值：服务端按秒级节流处理，整体耗时增加但不报错
+- 客户端建议：大批量操作可拆分批次或采用退避策略；UI 展示可能的耗时增加提示

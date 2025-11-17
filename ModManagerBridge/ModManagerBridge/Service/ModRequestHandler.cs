@@ -6,11 +6,18 @@ using ModManagerBridge.Models;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Linq;
+using System.Threading;
+using ModManagerBridge.Core;
 
 namespace ModManagerBridge.Service
 {
     public class ModRequestHandler
     {
+        private readonly ModManagerBridgeCore core;
+        public ModRequestHandler(ModManagerBridgeCore core)
+        {
+            this.core = core;
+        }
         /// <summary>
         /// 处理WebSocket请求并返回响应
         /// </summary>
@@ -21,27 +28,27 @@ namespace ModManagerBridge.Service
             {
                 case "get_mod_list":
                     return HandleGetModList();
-                    
                 case "activate_mod":
                     return HandleActivateMod(request.data);
-                    
                 case "deactivate_mod":
                     return HandleDeactivateMod(request.data);
-                    
                 case "rescan_mods":
                     return HandleRescanMods();
-                    
                 case "activate_mods":
                     return HandleActivateMods(request.data);
-                    
                 case "deactivate_mods":
                     return HandleDeactivateMods(request.data);
-                    
+                case "set_priority":
+                    return HandleSetPriority(request.data);
+                case "reorder_mods":
+                    return HandleReorderMods(request.data);
+                case "apply_order_and_rescan":
+                    return HandleApplyOrderAndRescan(request.data);
                 default:
                     Debug.LogWarning($"未知操作: {request?.action}");
-                    return JsonUtility.ToJson(new WebSocketResponse { 
-                        success = false, 
-                        message = "未知操作: " + request.action 
+                    return JsonUtility.ToJson(new WebSocketResponse {
+                        success = false,
+                        message = "未知操作: " + request.action
                     });
             }
         }
@@ -290,21 +297,26 @@ namespace ModManagerBridge.Service
                 // 解析JSON数组 - 使用更兼容的方法
                 string[] modNames = ParseStringArray(modNamesJson);
                 Debug.Log($"批量激活请求，数量: {modNames.Length}");
-                
-                // 限制一次最多处理10个mods
-                if (modNames.Length > 10)
-                {
-                    return JsonUtility.ToJson(new WebSocketResponse { 
-                        success = false, 
-                        message = "一次最多只能激活10个mods" 
-                    });
-                }
-                
+                int itemsLimit = core != null ? core.GetItemsPerSecond() : 50;
+                DateTime windowStart = DateTime.UtcNow;
+                int itemsCounter = 0;
                 var successMods = new List<string>();
                 var failedMods = new List<string>();
                 
                 foreach (string modName in modNames)
                 {
+                    itemsCounter++;
+                    if (itemsCounter >= itemsLimit)
+                    {
+                        var now = DateTime.UtcNow;
+                        var elapsedMs = (int)(now - windowStart).TotalMilliseconds;
+                        if (elapsedMs < 1000)
+                        {
+                            Thread.Sleep(1000 - elapsedMs);
+                        }
+                        windowStart = DateTime.UtcNow;
+                        itemsCounter = 0;
+                    }
                     // 提取mod名称（去除引号）
                     string actualModName = ExtractModName(modName);
                     
@@ -373,21 +385,26 @@ namespace ModManagerBridge.Service
                 // 解析JSON数组 - 使用更兼容的方法
                 string[] modNames = ParseStringArray(modNamesJson);
                 Debug.Log($"批量停用请求，数量: {modNames.Length}");
-                
-                // 限制一次最多处理10个mods
-                if (modNames.Length > 10)
-                {
-                    return JsonUtility.ToJson(new WebSocketResponse { 
-                        success = false, 
-                        message = "一次最多只能停用10个mods" 
-                    });
-                }
-                
+                int itemsLimit = core != null ? core.GetItemsPerSecond() : 50;
+                DateTime windowStart = DateTime.UtcNow;
+                int itemsCounter = 0;
                 var successMods = new List<string>();
                 var failedMods = new List<string>();
                 
                 foreach (string modName in modNames)
                 {
+                    itemsCounter++;
+                    if (itemsCounter >= itemsLimit)
+                    {
+                        var now = DateTime.UtcNow;
+                        var elapsedMs = (int)(now - windowStart).TotalMilliseconds;
+                        if (elapsedMs < 1000)
+                        {
+                            Thread.Sleep(1000 - elapsedMs);
+                        }
+                        windowStart = DateTime.UtcNow;
+                        itemsCounter = 0;
+                    }
                     // 提取mod名称（去除引号）
                     string actualModName = ExtractModName(modName);
                     
@@ -487,11 +504,16 @@ namespace ModManagerBridge.Service
         {
             try
             {
-                ModManager.Rescan();
-                Debug.Log("重新扫描mods完成");
+                if (core != null)
+                {
+                    core.RunOnMainThread(() => {
+                        ModManager.Rescan();
+                        Debug.Log("重新扫描mods完成");
+                    });
+                }
                 return JsonUtility.ToJson(new WebSocketResponse { 
                     success = true, 
-                    message = "Mods重新扫描成功" 
+                    message = "Mods重新扫描已派发" 
                 });
             }
             catch (Exception ex)
@@ -501,6 +523,144 @@ namespace ModManagerBridge.Service
                     success = false, 
                     message = "重新扫描mods时出错: " + ex.Message 
                 });
+            }
+        }
+
+        private string HandleSetPriority(string data)
+        {
+            try
+            {
+                string payload = data?.Trim();
+                if (string.IsNullOrEmpty(payload))
+                {
+                    return JsonUtility.ToJson(new WebSocketResponse { success = false, message = "数据为空" });
+                }
+                string name = payload;
+                int priority = 0;
+                int sep = payload.IndexOf(':');
+                if (sep >= 0)
+                {
+                    name = payload.Substring(0, sep).Trim();
+                    string pr = payload.Substring(sep + 1).Trim();
+                    if (!int.TryParse(pr, out priority))
+                    {
+                        return JsonUtility.ToJson(new WebSocketResponse { success = false, message = "优先级解析失败" });
+                    }
+                }
+                ModInfo? target = null;
+                foreach (var info in ModManager.modInfos)
+                {
+                    if (info.name == name)
+                    {
+                        target = info;
+                        break;
+                    }
+                }
+                if (!target.HasValue)
+                {
+                    return JsonUtility.ToJson(new WebSocketResponse { success = false, message = "未找到mod: " + name });
+                }
+                ModManager.SetModPriority(name, priority);
+                if (core != null) core.RunOnMainThread(() => ModManager.Rescan());
+                return JsonUtility.ToJson(new WebSocketResponse { success = true, message = "优先级已设置，重扫已派发" });
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"设置优先级错误: {ex.Message}");
+                return JsonUtility.ToJson(new WebSocketResponse { success = false, message = "设置优先级时出错: " + ex.Message });
+            }
+        }
+
+        private string HandleReorderMods(string modNamesJson)
+        {
+            try
+            {
+                string[] names = ParseStringArray(modNamesJson);
+                var success = new System.Collections.Generic.List<string>();
+                var failed = new System.Collections.Generic.List<string>();
+                int idx = 0;
+                foreach (var n in names)
+                {
+                    string name = ExtractModName(n);
+                    bool exists = false;
+                    foreach (var info in ModManager.modInfos)
+                    {
+                        if (info.name == name)
+                        {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (!exists)
+                    {
+                        failed.Add(name);
+                        continue;
+                    }
+                    ModManager.SetModPriority(name, idx);
+                    success.Add(name);
+                    idx++;
+                }
+                if (core != null) core.RunOnMainThread(() => ModManager.Rescan());
+                string message = $"success: {success.Count}/{names.Length}.";
+                if (success.Count > 0) message += $" true: '{string.Join("','", success)}'.";
+                if (failed.Count > 0) message += $" false: '{string.Join("','", failed)}'.";
+                return JsonUtility.ToJson(new WebSocketResponse { success = true, message = message + " 重扫已派发" });
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"重排错误: {ex.Message}");
+                return JsonUtility.ToJson(new WebSocketResponse { success = false, message = "重排mods时出错: " + ex.Message });
+            }
+        }
+
+        private string HandleApplyOrderAndRescan(string modNamesJson)
+        {
+            try
+            {
+                string[] names = ParseStringArray(modNamesJson);
+                var success = new System.Collections.Generic.List<string>();
+                var failed = new System.Collections.Generic.List<string>();
+                int idx = 0;
+                foreach (var n in names)
+                {
+                    string name = ExtractModName(n);
+                    bool exists = false;
+                    foreach (var info in ModManager.modInfos)
+                    {
+                        if (info.name == name)
+                        {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (!exists)
+                    {
+                        failed.Add(name);
+                        continue;
+                    }
+                    ModManager.SetModPriority(name, idx);
+                    success.Add(name);
+                    idx++;
+                }
+                if (core != null)
+                {
+                    core.RunOnMainThread(() => {
+                        ModManager.Rescan();
+                        if (ModManager.AllowActivatingMod && ModManager.Instance != null)
+                        {
+                            ModManager.Instance.ScanAndActivateMods();
+                        }
+                    });
+                }
+                string message = $"applied: {success.Count}/{names.Length}.";
+                if (success.Count > 0) message += $" true: '{string.Join("','", success)}'.";
+                if (failed.Count > 0) message += $" false: '{string.Join("','", failed)}'.";
+                return JsonUtility.ToJson(new WebSocketResponse { success = true, message = message + " 重扫与激活已派发" });
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"应用顺序错误: {ex.Message}");
+                return JsonUtility.ToJson(new WebSocketResponse { success = false, message = "应用顺序时出错: " + ex.Message });
             }
         }
     }

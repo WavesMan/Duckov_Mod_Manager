@@ -5,7 +5,7 @@
 [Setup]
 ; 应用信息 ----------------------------------------------------
 AppName=Duckov Mod Manager
-AppVersion=0.1.1
+AppVersion=0.2.5
 AppPublisher=WaveYou
 AppCopyright=Copyright © 2025 WaveYou
 ; 安装目录、开始菜单组等 --------------------------------------

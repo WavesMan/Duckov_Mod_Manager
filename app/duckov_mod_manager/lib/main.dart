@@ -3,6 +3,7 @@ import 'components/layout.dart';
 import 'services/route_service.dart';
 import 'page/home.dart';
 import 'page/mod_page.dart';
+import 'page/mod_order_page.dart';
 import 'page/mod_collections_page.dart';
 import 'page/steam_workshop_page.dart';
 import 'page/setting_page.dart';
@@ -62,6 +63,7 @@ class _MainAppLayoutState extends State<MainAppLayout> {
     _pages = [
       homePageView(),
       modsPageView(),
+      modOrderPageView(),
       modCollectionsPageView(),
       steamWorkshopView(),
       settingsPageView(),
@@ -182,10 +184,12 @@ class _MainAppLayoutState extends State<MainAppLayout> {
       case 1:
         return modsPageView();
       case 2:
-        return modCollectionsPageView();
+        return modOrderPageView();
       case 3:
-        return steamWorkshopView();
+        return modCollectionsPageView();
       case 4:
+        return steamWorkshopView();
+      case 5:
         return settingsPageView();
       default:
         return homePageView();

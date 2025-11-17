@@ -8,6 +8,7 @@ using System.IO.Compression;
 using ModManagerBridge.Models;
 using ModManagerBridge.Service;
 using ModManagerBridge.Core;
+using System.Threading;
 
 namespace ModManagerBridge.WebSocket
 {
@@ -20,6 +21,8 @@ namespace ModManagerBridge.WebSocket
         private NetworkStream stream;
         private ModManagerBridgeCore modCore;
         private bool isConnected = true;
+        private int requestsInWindow = 0;
+        private DateTime requestWindowStart = DateTime.UtcNow;
 
         public WebSocketConnection(TcpClient client, ModManagerBridgeCore modCore)
         {
@@ -170,6 +173,19 @@ namespace ModManagerBridge.WebSocket
             try
             {
                 Debug.Log($"收到WebSocket请求: {request}");
+                var now = DateTime.UtcNow;
+                if ((now - requestWindowStart).TotalSeconds >= 1.0)
+                {
+                    requestWindowStart = now;
+                    requestsInWindow = 0;
+                }
+                int limit = modCore != null ? modCore.GetRequestsPerSecond() : 20;
+                if (requestsInWindow >= limit)
+                {
+                    Send(JsonUtility.ToJson(new WebSocketResponse { success = false, message = "rate_limit_exceeded: requests_per_second" }));
+                    return;
+                }
+                requestsInWindow++;
                 
                 // 检查请求是否为空
                 if (string.IsNullOrEmpty(request))
@@ -198,7 +214,7 @@ namespace ModManagerBridge.WebSocket
         private string ProcessRequest(WebSocketRequest request)
         {
             // 将请求转发给处理模块
-            var requestHandler = new ModRequestHandler();
+            var requestHandler = new ModRequestHandler(modCore);
             return requestHandler.ProcessRequest(request);
         }
 

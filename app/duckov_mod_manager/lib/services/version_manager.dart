@@ -11,7 +11,7 @@ class VersionManager {
   static final VersionManager _instance = VersionManager._internal();
   
   // 版本号常量 - 集中管理
-  static const String CURRENT_VERSION = "0.2.4";
+  static const String CURRENT_VERSION = "0.2.5";
   // static const String CURRENT_VERSION = "0.0.1";
   static const String APP_NAME = "Duckov Mod Manager";
   static const String APP_DESCRIPTION = "Escape from Duckov 模组管理器";

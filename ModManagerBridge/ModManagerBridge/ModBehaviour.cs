@@ -18,6 +18,16 @@ namespace ModManagerBridge
             // 初始化WebSocket服务器用于mod管理
             webSocketServer = new WebSocketServer(core, core.GetPort());
             webSocketServer.InitializeWebSocketServer();
+
+            core.SetServer(webSocketServer);
+        }
+
+        void Update()
+        {
+            if (core != null)
+            {
+                core.PumpPendingTasks();
+            }
         }
 
         void OnDestroy()
